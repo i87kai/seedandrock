@@ -66,10 +66,10 @@ namespace SeedAndRock.World
         public float lakeMinDepth = 1.1f;
         public int lakeMinCells = 6;
 
-        public float grassSpacing = 3.2f;
+        public float grassSpacing = 2.4f;
         public float dressingSpacing = 6f;
         public float globalDressingDensity = 1f;
-        public int maxGrassBlades = 90000;
+        public int maxGrassBlades = 70000;
         public int maxTrees = 9000;
         public int maxRocks = 6000;
 

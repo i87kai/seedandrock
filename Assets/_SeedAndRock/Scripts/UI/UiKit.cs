@@ -275,6 +275,7 @@ namespace SeedAndRock.UI
             hint.textWrappingMode = TextWrappingModes.NoWrap;
 
             TMP_InputField input = gameObject.GetComponent<TMP_InputField>();
+            input.targetGraphic = image;
             input.textViewport = RectOf(viewport);
             input.textComponent = text;
             input.placeholder = hint;

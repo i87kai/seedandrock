@@ -290,7 +290,7 @@ namespace SeedAndRock.World
             tint = Color.Lerp(tint, tint * 1.15f, p.variation * 0.5f);
             tint.a = 1f;
             float height = p.scale * 1.05f;
-            float width = p.scale * 0.13f;
+            float width = p.scale * 0.16f;
             AppendGrassQuad(data, origin, height, width, p.rotationDegrees, tint);
             AppendGrassQuad(data, origin, height * 0.9f, width * 0.85f, p.rotationDegrees + 70f, tint * 0.94f);
         }

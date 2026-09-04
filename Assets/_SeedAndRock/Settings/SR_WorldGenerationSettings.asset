@@ -33,10 +33,10 @@ MonoBehaviour:
   riverDepth: 1.6
   lakeMinDepth: 1.1
   lakeMinCells: 6
-  grassSpacing: 3.2
+  grassSpacing: 2.4
   dressingSpacing: 6
   globalDressingDensity: 1
-  maxGrassBlades: 60000
+  maxGrassBlades: 70000
   maxTrees: 9000
   maxRocks: 6000
   waterResolution: 320
