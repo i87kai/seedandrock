@@ -43,6 +43,14 @@ namespace SeedAndRock.World
         [Range(0f, 1f)] public float forestMoistureThreshold = 0.53f;
         [Range(0f, 1f)] public float highlandHeightThreshold = 0.64f;
 
+        [Header("Climate")]
+        public float minAmbientCelsius = WorldClimate.DefaultMinCelsius;
+        public float snowLineCelsius = WorldClimate.DefaultSnowLineCelsius;
+        public float temperateCelsius = WorldClimate.DefaultTemperateCelsius;
+        public float hotFringeCelsius = WorldClimate.DefaultHotFringeCelsius;
+        public float maxAmbientCelsius = WorldClimate.DefaultMaxCelsius;
+        [Min(0f)] public float waterCoolingCelsius = 4f;
+
         [Header("Dressing")]
         [Range(0.75f, 8f)] public float grassSpacing = 5.25f;
         [Range(0.5f, 2.5f)] public float globalDressingDensity = 1f;
@@ -79,6 +87,18 @@ namespace SeedAndRock.World
                     return new BiomeTuning { grassDensity = 0.72f, treeDensity = 0.02f, rockDensity = 0.03f, terrainTint = new Color(0.46f, 0.64f, 0.25f), grassTint = new Color(0.56f, 0.76f, 0.28f) };
                 default: return grassland;
             }
+        }
+
+        public float ToAmbientCelsius(float temperature01, bool inWater)
+        {
+            float celsius = WorldClimate.Temperature01ToCelsius(
+                temperature01,
+                minAmbientCelsius,
+                snowLineCelsius,
+                temperateCelsius,
+                hotFringeCelsius,
+                maxAmbientCelsius);
+            return inWater ? celsius - waterCoolingCelsius : celsius;
         }
 
         private void OnValidate()

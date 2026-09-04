@@ -23,6 +23,12 @@ MonoBehaviour:
   terrainOctaves: 4
   forestMoistureThreshold: 0.53
   highlandHeightThreshold: 0.64
+  minAmbientCelsius: -15
+  snowLineCelsius: 0
+  temperateCelsius: 16
+  hotFringeCelsius: 32
+  maxAmbientCelsius: 46
+  waterCoolingCelsius: 4
   grassSpacing: 1.9
   globalDressingDensity: 0.82
   waterResolution: 72

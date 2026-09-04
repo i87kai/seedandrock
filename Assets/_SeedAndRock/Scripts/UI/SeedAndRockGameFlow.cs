@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using SeedAndRock.Player;
+using SeedAndRock.Survival;
 using SeedAndRock.World;
 using TMPro;
 using UnityEngine;
@@ -26,6 +27,11 @@ namespace SeedAndRock.UI
         public float playerX;
         public float playerY;
         public float playerZ;
+        public bool hasSurvivalState;
+        public float health;
+        public float hunger;
+        public float thirst;
+        public float bodyTemperature;
     }
 
     [Serializable]
@@ -100,6 +106,7 @@ namespace SeedAndRock.UI
         private RectTransform creationMenu;
         private RectTransform inWorldMenu;
         private RectTransform explorationHud;
+        private SurvivalStatusHud survivalHud;
         private TMP_Text explorationWorldLabel;
         private RectTransform worldListContent;
         private TMP_InputField nameInput;
@@ -211,26 +218,30 @@ namespace SeedAndRock.UI
             yield return null;
             generator.LoadWorldSeed(currentWorld.seed);
             yield return null;
-            if (currentWorld.hasVisited)
+            GameObject player = SeedAndRockPlayer.Find();
+            if (player != null)
             {
-                GameObject player = GameObject.Find("SeedAndRock_Player");
-                if (player != null) player.transform.position = new Vector3(currentWorld.playerX, currentWorld.playerY, currentWorld.playerZ);
+                if (currentWorld.hasVisited)
+                    player.transform.position = new Vector3(currentWorld.playerX, currentWorld.playerY, currentWorld.playerZ);
+                ApplySurvivalState(player);
             }
             inWorldMenu.gameObject.SetActive(false);
             dimmer.gameObject.SetActive(false);
             explorationHud.gameObject.SetActive(true);
+            if (survivalHud != null) survivalHud.SetVisible(true);
             SetPlayerControl(true);
         }
 
         private void SaveCurrentWorld()
         {
             if (currentWorld == null || currentScreen != Screen.InWorld) return;
-            GameObject player = GameObject.Find("SeedAndRock_Player");
+            GameObject player = SeedAndRockPlayer.Find();
             if (player != null)
             {
                 Vector3 position = player.transform.position;
                 currentWorld.playerX = position.x; currentWorld.playerY = position.y; currentWorld.playerZ = position.z;
                 currentWorld.hasVisited = true;
+                CaptureSurvivalState(player);
             }
             currentWorld.lastPlayedUtc = DateTime.UtcNow.ToString("O");
             WorldSaveRegistry.Save(currentWorld);
@@ -240,8 +251,32 @@ namespace SeedAndRock.UI
         {
             FirstPersonExplorerController controller = FindFirstObjectByType<FirstPersonExplorerController>(FindObjectsInactive.Include);
             if (controller != null) controller.enabled = enabled;
+            PlayerSurvival survival = FindFirstObjectByType<PlayerSurvival>(FindObjectsInactive.Include);
+            if (survival != null) survival.enabled = enabled;
+            if (survivalHud != null && !enabled) survivalHud.SetVisible(false);
             Cursor.lockState = enabled ? CursorLockMode.Locked : CursorLockMode.None;
             Cursor.visible = !enabled;
+        }
+
+        private void ApplySurvivalState(GameObject player)
+        {
+            PlayerSurvival survival = player.GetComponent<PlayerSurvival>();
+            if (survival == null) return;
+            survival.SetDifficulty(currentWorld.difficulty);
+            if (currentWorld.hasSurvivalState)
+                survival.ApplySnapshot(currentWorld.health, currentWorld.hunger, currentWorld.thirst, currentWorld.bodyTemperature);
+        }
+
+        private void CaptureSurvivalState(GameObject player)
+        {
+            PlayerSurvival survival = player.GetComponent<PlayerSurvival>();
+            if (survival == null) return;
+            SurvivalVitals snapshot = survival.CaptureSnapshot();
+            currentWorld.hasSurvivalState = true;
+            currentWorld.health = snapshot.Health;
+            currentWorld.hunger = snapshot.Hunger;
+            currentWorld.thirst = snapshot.Thirst;
+            currentWorld.bodyTemperature = snapshot.BodyTemperatureCelsius;
         }
 
         private void BuildCanvas()
@@ -262,6 +297,7 @@ namespace SeedAndRock.UI
             creationMenu = BuildWorldCreation(root.transform);
             inWorldMenu = BuildInWorldMenu(root.transform);
             explorationHud = BuildExplorationHud(root.transform);
+            survivalHud = SurvivalStatusHud.Create(root.transform);
         }
 
         private RectTransform BuildMainMenu(Transform parent)
@@ -347,7 +383,11 @@ namespace SeedAndRock.UI
         private void SetScreen(RectTransform active)
         {
             dimmer.gameObject.SetActive(active != inWorldMenu || inWorldMenu.gameObject.activeSelf);
-            if (active != inWorldMenu) explorationHud.gameObject.SetActive(false);
+            if (active != inWorldMenu)
+            {
+                explorationHud.gameObject.SetActive(false);
+                if (survivalHud != null) survivalHud.SetVisible(false);
+            }
             mainMenu.gameObject.SetActive(active == mainMenu);
             selectionMenu.gameObject.SetActive(active == selectionMenu);
             creationMenu.gameObject.SetActive(active == creationMenu);
