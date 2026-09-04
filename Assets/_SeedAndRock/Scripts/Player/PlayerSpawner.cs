@@ -13,7 +13,7 @@ namespace SeedAndRock.Player
         public const string PlayerName = "SeedAndRock_Player";
 
         public static FirstPersonExplorerController Find() =>
-            Object.FindFirstObjectByType<FirstPersonExplorerController>(FindObjectsInactive.Include);
+            Object.FindAnyObjectByType<FirstPersonExplorerController>(FindObjectsInactive.Include);
 
         public static FirstPersonExplorerController EnsurePlayer(Vector3 spawnPosition)
         {

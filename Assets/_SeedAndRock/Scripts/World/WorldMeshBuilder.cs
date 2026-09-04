@@ -55,7 +55,7 @@ namespace SeedAndRock.World
     /// <summary>Builds chunked terrain and water mesh data from the deterministic sampler. Thread-safe (no engine objects).</summary>
     public static class WorldMeshBuilder
     {
-        public static MeshData[] BuildTerrainChunks(WorldSampler sampler, TerrainGrid grid, WorldGenerationSettings palette, ChunkGrid chunks, CancellationToken token)
+        public static MeshData[] BuildTerrainChunks(WorldSampler sampler, TerrainGrid grid, WorldGenerationPalette palette, ChunkGrid chunks, CancellationToken token)
         {
             int n = grid.Resolution;
             int cellsPerChunk = (n - 1) / chunks.Count;
@@ -114,22 +114,22 @@ namespace SeedAndRock.World
             return result;
         }
 
-        private static Color TerrainColor(in SurfaceSample s, WorldGenerationSettings palette)
+        private static Color TerrainColor(in SurfaceSample s, WorldGenerationPalette palette)
         {
-            Color tint = palette.GetBiomeTuning(s.biome).terrainTint;
+            Color tint = palette.TerrainTint(s.biome);
             // Soften biome borders: pull the tint toward neighbouring climates using continuous factors.
-            Color forest = palette.forest.terrainTint;
-            Color plains = palette.plains.terrainTint;
+            Color forest = palette.TerrainTint(SeedAndRockBiome.Forest);
+            Color plains = palette.TerrainTint(SeedAndRockBiome.Plains);
             if (s.biome == SeedAndRockBiome.Grassland || s.biome == SeedAndRockBiome.Plains)
             {
                 float lush = Mathf.InverseLerp(0.35f, 0.7f, s.moisture);
                 tint = Color.Lerp(Color.Lerp(plains, tint, 0.5f), forest, lush * 0.45f);
             }
 
-            tint = Color.Lerp(tint, palette.desert.terrainTint, s.sand * 0.85f);
-            tint = Color.Lerp(tint, palette.highlands.terrainTint, s.rockiness * 0.5f);
-            tint = Color.Lerp(tint, palette.snow.terrainTint, s.snow);
-            float elevation = Mathf.InverseLerp(palette.waterLevel - palette.terrainHeight * 0.35f, palette.waterLevel + palette.terrainHeight, s.height);
+            tint = Color.Lerp(tint, palette.TerrainTint(SeedAndRockBiome.Desert), s.sand * 0.85f);
+            tint = Color.Lerp(tint, palette.TerrainTint(SeedAndRockBiome.Mountains), s.rockiness * 0.5f);
+            tint = Color.Lerp(tint, palette.TerrainTint(SeedAndRockBiome.Snow), s.snow);
+            float elevation = Mathf.InverseLerp(palette.WaterLevel - palette.TerrainHeight * 0.35f, palette.WaterLevel + palette.TerrainHeight, s.height);
             return new Color(tint.r, tint.g, tint.b, elevation);
         }
 

@@ -67,8 +67,8 @@ namespace SeedAndRock.UI
         private IEnumerator Start()
         {
             yield return null;
-            generator = FindFirstObjectByType<WorldGenerator>();
-            presentation = FindFirstObjectByType<WorldPresentationController>();
+            generator = FindAnyObjectByType<WorldGenerator>();
+            presentation = FindAnyObjectByType<WorldPresentationController>();
             saves = new WorldSaveService();
             BuildCanvas();
             GameSettings.Apply();
@@ -218,6 +218,10 @@ namespace SeedAndRock.UI
         public void EnterWorld(SavedWorld world)
         {
             if (world == null) return;
+            // WorldSceneBootstrap and this persistent UI can initialize in either order after a scene load.
+            // Resolve again at the point it is needed so a valid saved world never gets stranded in Create World.
+            if (generator == null) generator = FindAnyObjectByType<WorldGenerator>();
+            if (presentation == null) presentation = FindAnyObjectByType<WorldPresentationController>();
             if (generator == null)
             {
                 browser.SetHint("World generator is not present in this scene.");
@@ -418,7 +422,7 @@ namespace SeedAndRock.UI
             scaler.referenceResolution = new Vector2(1920f, 1080f);
             scaler.matchWidthOrHeight = 0.5f;
 
-            if (FindFirstObjectByType<EventSystem>() == null)
+            if (FindAnyObjectByType<EventSystem>() == null)
             {
                 GameObject events = new GameObject("EventSystem", typeof(EventSystem), typeof(InputSystemUIInputModule));
                 DontDestroyOnLoad(events);
@@ -443,7 +447,7 @@ namespace SeedAndRock.UI
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void Bootstrap()
         {
-            if (UnityEngine.Object.FindFirstObjectByType<SeedAndRockGameFlow>() != null) return;
+            if (UnityEngine.Object.FindAnyObjectByType<SeedAndRockGameFlow>() != null) return;
             new GameObject("SeedAndRock_GameFlow").AddComponent<SeedAndRockGameFlow>();
         }
     }

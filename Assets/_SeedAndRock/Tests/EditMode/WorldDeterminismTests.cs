@@ -129,7 +129,10 @@ namespace SeedAndRock.Tests
             float waterFraction = water / (float)(grid * grid);
             Assert.That(waterFraction, Is.GreaterThan(0.05f).And.LessThan(0.6f), "water coverage should be believable");
             Assert.That(biomes.Count, Is.GreaterThanOrEqualTo(4), "expected a varied biome mix");
-            Assert.That(biomes, Does.Contain(SeedAndRockBiome.Plains).Or.Contain(SeedAndRockBiome.Grassland));
+            Assert.That(
+                biomes.Contains(SeedAndRockBiome.Plains) || biomes.Contains(SeedAndRockBiome.Grassland),
+                Is.True,
+                "expected plains or grassland in the sampled biome mix");
         }
     }
 

@@ -112,11 +112,13 @@ namespace SeedAndRock.World
             // ---- Stage: preparing world (settings snapshot + terrain/climate fields) -------------------
             Report(progress, WorldGenerationStage.PreparingWorld, null);
             WorldSettingsData data;
+            WorldGenerationPalette palette;
             TerrainField terrain;
             ClimateField climate;
             try
             {
                 data = settings.ToData(seed);
+                palette = settings.ToPalette();
                 terrain = new TerrainField(data);
                 climate = new ClimateField(data, terrain);
                 root = new GameObject(rootName).transform;
@@ -165,8 +167,9 @@ namespace SeedAndRock.World
             // ---- Stage: sculpting terrain (mesh buffers on worker, upload sliced on main thread) -------
             Report(progress, WorldGenerationStage.SculptingTerrain, null);
             ChunkGrid chunks = new ChunkGrid(data.terrainChunks, data.worldSize);
-            Task<MeshData[]> terrainTask = Task.Run(() => WorldMeshBuilder.BuildTerrainChunks(sampler, gridTask.Result, settings, chunks, token), token);
-            Task<MeshData[]> waterTask = Task.Run(() => WorldMeshBuilder.BuildWaterChunks(sampler, settings.waterResolution, chunks, token), token);
+            int waterResolution = settings.waterResolution;
+            Task<MeshData[]> terrainTask = Task.Run(() => WorldMeshBuilder.BuildTerrainChunks(sampler, gridTask.Result, palette, chunks, token), token);
+            Task<MeshData[]> waterTask = Task.Run(() => WorldMeshBuilder.BuildWaterChunks(sampler, waterResolution, chunks, token), token);
             yield return WaitFor(terrainTask);
             if (Faulted(terrainTask, root, onError)) yield break;
 
@@ -235,7 +238,7 @@ namespace SeedAndRock.World
                 result.TreeCount = placement.Trees.Count;
                 result.RockCount = placement.Rocks.Count;
                 result.GrassCount = placement.Grass.Count;
-                PropMeshSet set = PropMeshBuilder.Build(placement, settings, chunks, token);
+                PropMeshSet set = PropMeshBuilder.Build(placement, palette, chunks, token);
                 Volatile.Write(ref placementProgress, 1f);
                 return set;
             }, token);

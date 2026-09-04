@@ -40,7 +40,7 @@ namespace SeedAndRock.World
             4, 9, 5, 2, 4, 11, 6, 2, 10, 8, 6, 7, 9, 8, 1
         };
 
-        public static PropMeshSet Build(PlacementResult placement, WorldGenerationSettings palette, ChunkGrid chunks, CancellationToken token)
+        public static PropMeshSet Build(PlacementResult placement, WorldGenerationPalette palette, ChunkGrid chunks, CancellationToken token)
         {
             PropMeshSet set = new PropMeshSet
             {
@@ -84,14 +84,14 @@ namespace SeedAndRock.World
 
         // ------------------------------------------------------------------ trees
 
-        private static void AppendTree(MeshData trunks, MeshData foliage, in PlacementInstance p, WorldGenerationSettings palette)
+        private static void AppendTree(MeshData trunks, MeshData foliage, in PlacementInstance p, WorldGenerationPalette palette)
         {
             Vector3 origin = new Vector3(p.x, p.y, p.z);
             YawRotation yaw = new YawRotation(p.rotationDegrees);
             float s = p.scale;
             float v = p.variation;
             Color trunkColor = Color.Lerp(new Color(0.33f, 0.20f, 0.10f), new Color(0.45f, 0.33f, 0.20f), v);
-            Color leaf = palette.GetBiomeTuning(p.biome).grassTint;
+            Color leaf = palette.GrassTint(p.biome);
 
             switch (p.variant)
             {
@@ -282,10 +282,10 @@ namespace SeedAndRock.World
 
         // ------------------------------------------------------------------ grass
 
-        private static void AppendGrass(MeshData data, in PlacementInstance p, WorldGenerationSettings palette)
+        private static void AppendGrass(MeshData data, in PlacementInstance p, WorldGenerationPalette palette)
         {
             Vector3 origin = new Vector3(p.x, p.y - 0.03f, p.z);
-            Color tint = palette.GetBiomeTuning(p.biome).grassTint;
+            Color tint = palette.GrassTint(p.biome);
             tint = Color.Lerp(tint, new Color(0.66f, 0.66f, 0.30f), (1f - p.moisture) * 0.4f);
             tint = Color.Lerp(tint, tint * 1.15f, p.variation * 0.5f);
             tint.a = 1f;

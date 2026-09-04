@@ -17,6 +17,30 @@ namespace SeedAndRock.World
     }
 
     /// <summary>
+    /// Main-thread snapshot of the presentation values consumed while building worker-thread mesh buffers.
+    /// It deliberately contains no UnityEngine.Object references.
+    /// </summary>
+    public sealed class WorldGenerationPalette
+    {
+        private readonly Color[] terrainTints;
+        private readonly Color[] grassTints;
+
+        public float WaterLevel { get; }
+        public float TerrainHeight { get; }
+
+        public WorldGenerationPalette(float waterLevel, float terrainHeight, Color[] terrainTints, Color[] grassTints)
+        {
+            WaterLevel = waterLevel;
+            TerrainHeight = terrainHeight;
+            this.terrainTints = terrainTints;
+            this.grassTints = grassTints;
+        }
+
+        public Color TerrainTint(SeedAndRockBiome biome) => terrainTints[Mathf.Clamp((int)biome, 0, terrainTints.Length - 1)];
+        public Color GrassTint(SeedAndRockBiome biome) => grassTints[Mathf.Clamp((int)biome, 0, grassTints.Length - 1)];
+    }
+
+    /// <summary>
     /// Designer-facing generation settings. This asset is only a container: <see cref="ToData"/> produces the
     /// immutable snapshot consumed by the engine-independent core, so tweaking values here never leaks
     /// engine state into the deterministic pipeline.
@@ -146,6 +170,21 @@ namespace SeedAndRock.World
 
             data.Sanitize();
             return data;
+        }
+
+        /// <summary>Copies all designer colours needed by background mesh construction on the main thread.</summary>
+        public WorldGenerationPalette ToPalette()
+        {
+            Color[] terrain = new Color[WorldSettingsData.BiomeCount];
+            Color[] grass = new Color[WorldSettingsData.BiomeCount];
+            for (int i = 0; i < WorldSettingsData.BiomeCount; i++)
+            {
+                BiomeTuning tuning = GetBiomeTuning((SeedAndRockBiome)i);
+                terrain[i] = tuning.terrainTint;
+                grass[i] = tuning.grassTint;
+            }
+
+            return new WorldGenerationPalette(waterLevel, terrainHeight, terrain, grass);
         }
 
         private void OnValidate()
