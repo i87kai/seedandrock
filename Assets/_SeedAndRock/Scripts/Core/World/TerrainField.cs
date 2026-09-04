@@ -83,8 +83,8 @@ namespace SeedAndRock.World
             // Land slopes gently toward the world border so drainage has an outlet and the map reads as a
             // coast-bounded region instead of a box with clipped terrain; the interior keeps its basins.
             float radial = SRMath.Length(x, z) / halfSize * 0.35f + SRMath.Max(SRMath.Abs(x), SRMath.Abs(z)) / halfSize * 0.65f;
-            float edge = SRMath.SmoothStep(0.86f, 1.12f, radial);
-            float baseShape = waterLevel + height * 0.17f + continent * height * 0.27f + broad * height * 0.12f - edge * height * 0.5f;
+            float edge = SRMath.SmoothStep(0.90f, 1.12f, radial);
+            float baseShape = waterLevel + height * 0.17f + continent * height * 0.27f + broad * height * 0.12f - edge * height * 0.7f;
             float relief = rolling * height * SRMath.Lerp(0.035f, 0.13f, hillsMask) + fine * height * 0.018f * (1f - plains * 0.7f);
             float peaks = mountains * (height * 0.2f + ridged * height * 0.95f);
 

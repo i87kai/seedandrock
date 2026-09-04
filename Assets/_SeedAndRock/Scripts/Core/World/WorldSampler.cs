@@ -81,16 +81,18 @@ namespace SeedAndRock.World
             return TryGetWaterSurface(x, z, height, out surface);
         }
 
+        /// <summary>Water test for a point whose terrain height is already known (avoids a second height evaluation).</summary>
+        public bool TryGetWaterSurfaceAt(float x, float z, float knownHeight, out float surface) => TryGetWaterSurface(x, z, knownHeight, out surface);
+
         /// <summary>Water height used for mesh vertices; always defined so shore quads can extend under the terrain.</summary>
         public float GetWaterSurfaceCandidate(float x, float z)
         {
             float lake = Hydrology.Sample(Hydrology.LakeSurface, x, z);
-            float river = Hydrology.Sample(Hydrology.RiverSurface, x, z);
-            float strength = Hydrology.Sample(Hydrology.RiverStrength, x, z);
+            float proximity = Hydrology.Sample(Hydrology.RiverProximity, x, z);
+            if (proximity <= 0.01f) return lake;
+            float river = Hydrology.SampleRiver(Hydrology.RiverSurface, x, z, lake);
             float lakeMask = Hydrology.Sample(Hydrology.LakeMask, x, z);
-            if (strength <= 0.001f) return lake;
-            if (lakeMask <= 0.001f) return river;
-            return SRMath.Lerp(lake, river, SRMath.SmoothStep(0.05f, 0.6f, strength) * (1f - lakeMask));
+            return SRMath.Lerp(lake, river, SRMath.SmoothStep(0.01f, 0.35f, proximity) * (1f - lakeMask));
         }
 
         public SurfaceSample SampleSurface(float x, float z)
@@ -150,8 +152,8 @@ namespace SeedAndRock.World
             float strength = Hydrology.Sample(Hydrology.RiverStrength, x, z);
             if (strength > 0.0005f)
             {
-                float surface = Hydrology.Sample(Hydrology.RiverSurface, x, z);
-                float bed = Hydrology.Sample(Hydrology.RiverBed, x, z);
+                float surface = Hydrology.SampleRiver(Hydrology.RiverSurface, x, z, baseHeight);
+                float bed = Hydrology.SampleRiver(Hydrology.RiverBed, x, z, baseHeight);
                 float profile = SRMath.SmoothStep(0.05f, 0.65f, strength);
                 float channel = SRMath.Lerp(surface + 0.35f, bed, profile);
                 height = SRMath.Lerp(height, SRMath.Min(height, channel), SRMath.Smooth01(strength * 1.3f));
@@ -188,7 +190,7 @@ namespace SeedAndRock.World
             float strength = Hydrology.Sample(Hydrology.RiverStrength, x, z);
             if (strength > 0.02f)
             {
-                float river = Hydrology.Sample(Hydrology.RiverSurface, x, z);
+                float river = Hydrology.SampleRiver(Hydrology.RiverSurface, x, z, float.MinValue);
                 if (river > height + 0.02f) surface = SRMath.Max(surface, river);
             }
 

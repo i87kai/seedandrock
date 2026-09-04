@@ -158,8 +158,11 @@ namespace SeedAndRock.World
                     float x = -half + ix * step;
                     int index = iz * resolution + ix;
                     float height = sampler.GetHeightAt(x, z);
-                    isWater[index] = sampler.TryGetWaterSurfaceAt(x, z, out float found);
+                    isWater[index] = sampler.TryGetWaterSurfaceAt(x, z, height, out float found);
                     float candidate = isWater[index] ? found : sampler.GetWaterSurfaceCandidate(x, z);
+                    // Land vertices never lift the sheet above their own ground: where a hillside stream's
+                    // surface would otherwise hang over a lower bank, the edge hugs the terrain instead.
+                    if (!isWater[index] && candidate > height + 1.0f) candidate = height + 0.05f;
                     surface[index] = candidate;
                     depth[index] = candidate - height;
                     flow[index] = sampler.Hydrology.Sample(sampler.Hydrology.RiverStrength, x, z);

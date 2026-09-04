@@ -80,5 +80,30 @@ namespace SeedAndRock.World
             float d = grid[z1 * width + x1];
             return LerpUnclamped(LerpUnclamped(a, b, tx), LerpUnclamped(c, d, tx), tz);
         }
+
+        /// <summary>
+        /// Weight-aware bilinear sample: nodes with zero weight do not contribute, so sparse fields
+        /// (e.g. river surfaces painted only near rivers) interpolate without bleeding in unset zeros.
+        /// Returns <paramref name="fallback"/> when all four weights are zero.
+        /// </summary>
+        public static float SampleBilinearWeighted(float[] values, float[] weights, int width, int height, float gx, float gz, float fallback = 0f)
+        {
+            gx = Clamp(gx, 0f, width - 1.0001f);
+            gz = Clamp(gz, 0f, height - 1.0001f);
+            int x0 = (int)gx;
+            int z0 = (int)gz;
+            int x1 = Math.Min(x0 + 1, width - 1);
+            int z1 = Math.Min(z0 + 1, height - 1);
+            float tx = gx - x0;
+            float tz = gz - z0;
+            int ia = z0 * width + x0, ib = z0 * width + x1, ic = z1 * width + x0, id = z1 * width + x1;
+            float wa = (1f - tx) * (1f - tz) * weights[ia];
+            float wb = tx * (1f - tz) * weights[ib];
+            float wc = (1f - tx) * tz * weights[ic];
+            float wd = tx * tz * weights[id];
+            float total = wa + wb + wc + wd;
+            if (total <= 1e-8f) return fallback;
+            return (values[ia] * wa + values[ib] * wb + values[ic] * wc + values[id] * wd) / total;
+        }
     }
 }

@@ -224,7 +224,7 @@ namespace SeedAndRock.World
                     float x = SRMath.Cos(angle) * radius;
                     float z = SRMath.Sin(angle) * radius;
                     SurfaceSample s = sampler.SampleSurface(x, z);
-                    bool dry = !s.isWater && s.height > sampler.GetWaterSurfaceCandidate(x, z) + 0.8f && s.waterDistance > 4f;
+                    bool dry = !s.isWater && s.height > sampler.WaterLevel + 0.5f && s.waterDistance > 4f;
                     bool gentle = s.slope < 0.35f && s.biome != SeedAndRockBiome.Mountains;
                     if (dry && gentle)
                         return new SpawnPoint { x = x, y = s.height + 0.2f, z = z };

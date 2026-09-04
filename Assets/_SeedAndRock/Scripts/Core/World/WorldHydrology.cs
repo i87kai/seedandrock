@@ -34,6 +34,8 @@ namespace SeedAndRock.World
         public readonly float[] LakeSurface;
         /// <summary>0..1 river ribbon profile: 1 at the channel centre, 0 at the outer bank.</summary>
         public readonly float[] RiverStrength;
+        /// <summary>Wider 0..1 falloff around rivers; wherever it is positive, RiverSurface/RiverBed hold the nearest river's values.</summary>
+        public readonly float[] RiverProximity;
         /// <summary>Water surface of the river influencing the node.</summary>
         public readonly float[] RiverSurface;
         /// <summary>Channel bed height of the river influencing the node.</summary>
@@ -57,6 +59,7 @@ namespace SeedAndRock.World
             LakeMask = new float[count];
             LakeSurface = new float[count];
             RiverStrength = new float[count];
+            RiverProximity = new float[count];
             RiverSurface = new float[count];
             RiverBed = new float[count];
             WaterDistance = new float[count];
@@ -76,6 +79,13 @@ namespace SeedAndRock.World
         {
             ToGrid(x, z, out float gx, out float gz);
             return SRMath.SampleBilinear(field, Resolution, Resolution, gx, gz);
+        }
+
+        /// <summary>Samples a sparse river field using RiverProximity as interpolation weight.</summary>
+        public float SampleRiver(float[] field, float x, float z, float fallback = 0f)
+        {
+            ToGrid(x, z, out float gx, out float gz);
+            return SRMath.SampleBilinearWeighted(field, RiverProximity, Resolution, Resolution, gx, gz, fallback);
         }
 
         /// <summary>Fraction of nodes covered by lakes or sea.</summary>
@@ -369,7 +379,10 @@ namespace SeedAndRock.World
                 float w = width[index];
                 float outer = w * 1.25f + cell * 0.5f;
                 float inner = w * 0.5f;
-                int radius = SRMath.CeilToInt(outer / cell);
+                // Surface/bed are painted a few cells beyond the visible ribbon so water-mesh vertices on the
+                // bank interpolate toward this river instead of a distant lake.
+                float reach = outer + cell * 2.5f;
+                int radius = SRMath.CeilToInt(reach / cell);
                 for (int dz = -radius; dz <= radius; dz++)
                 {
                     int nz = cz + dz;
@@ -379,15 +392,18 @@ namespace SeedAndRock.World
                         int nx = cx + dx;
                         if (nx < 0 || nx >= n) continue;
                         float distance = SRMath.Length(dx * cell, dz * cell);
-                        float strength = SRMath.Clamp01((outer - distance) / SRMath.Max(outer - inner, 0.01f));
-                        if (strength <= 0f) continue;
+                        float proximity = SRMath.Clamp01((reach - distance) / reach);
+                        if (proximity <= 0f) continue;
                         int ni = nz * n + nx;
-                        if (strength > field.RiverStrength[ni])
+                        if (proximity > field.RiverProximity[ni])
                         {
-                            field.RiverStrength[ni] = strength;
+                            field.RiverProximity[ni] = proximity;
                             field.RiverSurface[ni] = surface[index];
                             field.RiverBed[ni] = bed[index];
                         }
+
+                        float strength = SRMath.Clamp01((outer - distance) / SRMath.Max(outer - inner, 0.01f));
+                        if (strength > field.RiverStrength[ni]) field.RiverStrength[ni] = strength;
                     }
                 }
             }
