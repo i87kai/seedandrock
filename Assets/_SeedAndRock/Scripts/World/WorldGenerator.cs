@@ -1,5 +1,6 @@
 using SeedAndRock.Interaction;
 using SeedAndRock.Player;
+using SeedAndRock.Survival;
 using UnityEngine;
 
 namespace SeedAndRock.World
@@ -124,24 +125,37 @@ namespace SeedAndRock.World
             return height;
         }
 
-        public SeedAndRockBiome GetBiomeAt(float x, float z)
+        public ClimateSample GetClimateAt(float x, float z)
         {
+            if (settings == null)
+                return default;
+
             float height = GetHeightAt(x, z);
             float normalizedHeight = Mathf.InverseLerp(-settings.terrainHeight * 0.25f, settings.terrainHeight * 0.8f, height);
             Vector2 warped = DomainWarp(settings.seed + 400, x, z);
             float moisture = SeedNoise.Fractal(settings.seed + 419, warped.x, warped.y, 3, settings.continentFrequency * 0.70f, 2f, 0.52f) * 0.5f + 0.5f;
             float temperature = SeedNoise.Fractal(settings.seed + 463, warped.x, warped.y, 3, settings.continentFrequency * 0.52f, 2f, 0.52f) * 0.5f + 0.5f;
             temperature -= normalizedHeight * 0.33f;
+            float slope = GetSlopeAt(x, z);
+            bool inWater = TryGetWaterSurfaceAt(x, z, out float waterSurface);
+            SeedAndRockBiome biome = ClassifyBiome(normalizedHeight, moisture, temperature, slope);
+            float ambientCelsius = settings.ToAmbientCelsius(temperature, inWater);
+            return new ClimateSample(height, normalizedHeight, moisture, temperature, slope, inWater, waterSurface, biome, ambientCelsius);
+        }
 
+        public SeedAndRockBiome GetBiomeAt(float x, float z) => GetClimateAt(x, z).Biome;
+
+        private SeedAndRockBiome ClassifyBiome(float normalizedHeight, float moisture, float temperature, float slope)
+        {
             if (normalizedHeight > settings.highlandHeightThreshold + 0.15f)
                 return temperature < 0.38f ? SeedAndRockBiome.Snow : SeedAndRockBiome.Mountains;
-            if (temperature < 0.28f)
+            if (temperature < WorldClimate.SnowThreshold)
                 return SeedAndRockBiome.Snow;
-            if (temperature > 0.68f && moisture < 0.43f)
+            if (temperature > WorldClimate.DesertThreshold && moisture < 0.43f)
                 return SeedAndRockBiome.Desert;
             if (moisture > settings.forestMoistureThreshold && normalizedHeight < 0.68f)
                 return SeedAndRockBiome.Forest;
-            if (GetSlopeAt(x, z) < 0.20f && normalizedHeight < 0.52f)
+            if (slope < 0.20f && normalizedHeight < 0.52f)
                 return SeedAndRockBiome.Plains;
             return SeedAndRockBiome.Grassland;
         }
@@ -203,7 +217,16 @@ namespace SeedAndRock.World
 
         private void CreatePlayer(Transform parent)
         {
-            GameObject player = new GameObject("SeedAndRock_Player", typeof(CharacterController), typeof(FirstPersonExplorerController), typeof(SeedAndRockInteractionRaycaster));
+            GameObject leftover = GameObject.Find(SeedAndRockPlayer.ObjectName);
+            if (leftover != null && leftover.transform.parent != parent)
+                leftover.SetActive(false);
+
+            GameObject player = new GameObject(
+                SeedAndRockPlayer.ObjectName,
+                typeof(CharacterController),
+                typeof(FirstPersonExplorerController),
+                typeof(SeedAndRockInteractionRaycaster),
+                typeof(PlayerSurvival));
             player.transform.SetParent(parent, false);
             player.transform.position = FindSafeSpawn();
             GameObject cameraObject = new GameObject("Main Camera", typeof(Camera), typeof(AudioListener));
