@@ -1,115 +1,65 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.IO;
 using SeedAndRock.Player;
+using SeedAndRock.Saves;
 using SeedAndRock.World;
-using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
+using UnityEngine.SceneManagement;
 
 namespace SeedAndRock.UI
 {
-    [Serializable]
-    public sealed class SavedWorld
+    public enum GameFlowState
     {
-        public string id;
-        public string worldName;
-        public int seed;
-        public string difficulty;
-        public string createdUtc;
-        public string lastPlayedUtc;
-        public bool hasVisited;
-        public float playerX;
-        public float playerY;
-        public float playerZ;
+        MainMenu,
+        WorldBrowser,
+        CreateWorld,
+        Loading,
+        Playing,
+        Paused,
+        Settings
     }
 
-    [Serializable]
-    internal sealed class SavedWorldCollection { public List<SavedWorld> worlds = new List<SavedWorld>(); }
-
-    /// <summary>Small persistent registry. Terrain is recreated from its seed; player progress is stored as world metadata.</summary>
-    public static class WorldSaveRegistry
-    {
-        private const string FileName = "seed-and-rock-worlds.json";
-        private static string FilePath => Path.Combine(Application.persistentDataPath, FileName);
-
-        public static List<SavedWorld> Load()
-        {
-            try
-            {
-                if (!File.Exists(FilePath)) return new List<SavedWorld>();
-                SavedWorldCollection collection = JsonUtility.FromJson<SavedWorldCollection>(File.ReadAllText(FilePath));
-                return collection != null && collection.worlds != null ? collection.worlds : new List<SavedWorld>();
-            }
-            catch (Exception exception)
-            {
-                Debug.LogWarning("[SeedAndRock] Could not read saved worlds: " + exception.Message);
-                return new List<SavedWorld>();
-            }
-        }
-
-        public static void Save(SavedWorld world)
-        {
-            List<SavedWorld> worlds = Load();
-            int index = worlds.FindIndex(candidate => candidate.id == world.id);
-            if (index >= 0) worlds[index] = world; else worlds.Add(world);
-            string json = JsonUtility.ToJson(new SavedWorldCollection { worlds = worlds }, true);
-            string temporary = FilePath + ".tmp";
-            Directory.CreateDirectory(Application.persistentDataPath);
-            File.WriteAllText(temporary, json);
-            File.Copy(temporary, FilePath, true);
-            File.Delete(temporary);
-        }
-
-        public static bool ContainsSeed(int seed) => Load().Exists(world => world.seed == seed);
-
-        public static int GenerateUniqueSeed()
-        {
-            int seed;
-            do
-            {
-                seed = Guid.NewGuid().GetHashCode() & int.MaxValue;
-            } while (seed == 0 || ContainsSeed(seed));
-            return seed;
-        }
-    }
-
-    /// <summary>Creates and owns the complete title → world picker → creation → playable-world flow.</summary>
+    /// <summary>
+    /// State machine for the runtime flow: Main Menu -> World Browser -> Create/Load -> Loading -> Gameplay
+    /// -> Pause -> Save. Screens build and own their widgets; persistence lives in <see cref="WorldSaveService"/>;
+    /// generation lives in <see cref="WorldGenerator"/>. This component only coordinates.
+    /// </summary>
     public sealed class SeedAndRockGameFlow : MonoBehaviour
     {
-        private enum Screen { MainMenu, WorldSelection, WorldCreation, InWorld }
-
         public static SeedAndRockGameFlow Instance { get; private set; }
 
         private const string CanvasName = "SeedAndRock_GameFlowCanvas";
-        private readonly Color night = new Color(0.025f, 0.055f, 0.070f, 0.97f);
-        private readonly Color panel = new Color(0.055f, 0.115f, 0.125f, 0.96f);
-        private readonly Color teal = new Color(0.15f, 0.72f, 0.62f, 1f);
-        private readonly Color gold = new Color(0.95f, 0.68f, 0.23f, 1f);
-        private readonly Color pale = new Color(0.88f, 0.96f, 0.92f, 1f);
 
         private WorldGenerator generator;
-        private Canvas canvas;
-        private UnityEngine.UI.Image dimmer;
-        private RectTransform mainMenu;
-        private RectTransform selectionMenu;
-        private RectTransform creationMenu;
-        private RectTransform inWorldMenu;
-        private RectTransform explorationHud;
-        private TMP_Text explorationWorldLabel;
-        private RectTransform worldListContent;
-        private TMP_InputField nameInput;
-        private TMP_InputField seedInput;
-        private TMP_Text difficultyText;
-        private TMP_Text creationHint;
-        private TMP_Text selectionHint;
-        private string selectedDifficulty = "Normal";
+        private WorldPresentationController presentation;
+        private WorldSaveService saves;
+
+        private MainMenuScreen mainMenu;
+        private WorldBrowserScreen browser;
+        private CreateWorldScreen creation;
+        private LoadingScreen loading;
+        private PauseMenuScreen pause;
+        private SettingsScreen settings;
+        private ConfirmDialog confirm;
+        private HudOverlay hud;
+        private DeveloperOverlay developerOverlay;
+        private ScreenFader fader;
+
+        private GameFlowState state = GameFlowState.MainMenu;
+        private GameFlowState settingsReturnState = GameFlowState.MainMenu;
         private SavedWorld currentWorld;
-        private Screen currentScreen;
+        private bool worldLoaded;
+        private Coroutine worldEntryRoutine;
+
+        private const string GameplaySceneName = "World";
+
+        public GameFlowState State => state;
+        public SavedWorld CurrentWorld => currentWorld;
 
         private void Awake()
         {
@@ -118,303 +68,444 @@ namespace SeedAndRock.UI
             DontDestroyOnLoad(gameObject);
         }
 
+        private void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+        }
+
         private IEnumerator Start()
         {
             yield return null;
-            generator = FindFirstObjectByType<WorldGenerator>();
+            generator = FindAnyObjectByType<WorldGenerator>();
+            presentation = FindAnyObjectByType<WorldPresentationController>();
+            saves = new WorldSaveService();
             BuildCanvas();
+            GameSettings.Apply();
             SetPlayerControl(false);
-            ShowMainMenu();
+            ShowMainMenu(true);
         }
 
         private void Update()
         {
-            if (!Keyboard.current.escapeKey.wasPressedThisFrame) return;
-            if (currentScreen == Screen.InWorld) ShowWorldSelection();
-            else if (currentScreen == Screen.WorldCreation) ShowWorldSelection();
-            else if (currentScreen == Screen.WorldSelection) ShowMainMenu();
+            Keyboard keyboard = Keyboard.current;
+            if (keyboard == null) return;
+
+            if (keyboard.escapeKey.wasPressedThisFrame) HandleEscape();
+            if (keyboard.f3Key.wasPressedThisFrame && (state == GameFlowState.Playing || state == GameFlowState.Paused) && developerOverlay != null)
+                developerOverlay.Toggle();
+
+            if (state == GameFlowState.Loading) loading.Tick();
+            hud?.Tick();
+        }
+
+        private void HandleEscape()
+        {
+            if (confirm != null && confirm.IsVisible) { confirm.Hide(); return; }
+            switch (state)
+            {
+                case GameFlowState.Playing: PauseGame(); break;
+                case GameFlowState.Paused: ResumeGame(); break;
+                case GameFlowState.Settings: CloseSettings(); break;
+                case GameFlowState.CreateWorld: ShowWorldBrowser(); break;
+                case GameFlowState.WorldBrowser: ShowMainMenu(); break;
+            }
         }
 
         private void OnApplicationPause(bool paused) { if (paused) SaveCurrentWorld(); }
         private void OnApplicationQuit() { SaveCurrentWorld(); }
 
-        public void ShowMainMenu()
+        // ------------------------------------------------------------------ menus
+
+        public void ShowMainMenu() => ShowMainMenu(false);
+
+        private void ShowMainMenu(bool instant)
         {
-            SaveCurrentWorld();
-            currentScreen = Screen.MainMenu;
+            HideAll();
+            state = GameFlowState.MainMenu;
             SetPlayerControl(false);
-            SetScreen(mainMenu);
+            mainMenu.Show(instant);
         }
 
-        public void ShowWorldSelection()
+        public void ShowWorldBrowser()
         {
-            SaveCurrentWorld();
-            currentScreen = Screen.WorldSelection;
+            HideAll();
+            state = GameFlowState.WorldBrowser;
             SetPlayerControl(false);
-            PopulateWorldList();
-            SetScreen(selectionMenu);
+            browser.SetHint("Choose a landscape to continue your journey.");
+            browser.Populate(saves.LoadAll());
+            browser.Show();
         }
 
-        public void ShowWorldCreation()
+        public void ShowCreateWorld()
         {
-            currentScreen = Screen.WorldCreation;
-            selectedDifficulty = "Normal";
-            nameInput.text = "New World";
-            seedInput.text = WorldSaveRegistry.GenerateUniqueSeed().ToString();
-            difficultyText.text = "Difficulty: " + selectedDifficulty;
-            creationHint.text = "A unique seed is ready. You can replace it with your own number.";
-            SetScreen(creationMenu);
+            HideAll();
+            state = GameFlowState.CreateWorld;
+            creation.Reset(NewUniqueSeed());
+            creation.Show();
         }
 
-        public void GenerateAnotherSeed()
+        public void ShowSettings()
         {
-            seedInput.text = WorldSaveRegistry.GenerateUniqueSeed().ToString();
-            creationHint.text = "New unique seed generated.";
+            if (state == GameFlowState.Settings) return;
+            settingsReturnState = state;
+            if (state == GameFlowState.Playing) PauseGame();
+            HideAll(keepPause: state == GameFlowState.Paused);
+            state = GameFlowState.Settings;
+            settings.Show();
         }
 
-        public void CycleDifficulty()
+        public void CloseSettings()
         {
-            selectedDifficulty = selectedDifficulty == "Peaceful" ? "Easy" : selectedDifficulty == "Easy" ? "Normal" : selectedDifficulty == "Normal" ? "Hard" : "Peaceful";
-            difficultyText.text = "Difficulty: " + selectedDifficulty;
-        }
-
-        public void CreateWorld()
-        {
-            string worldName = nameInput.text.Trim();
-            if (string.IsNullOrWhiteSpace(worldName)) { creationHint.text = "Choose a name for this world."; return; }
-            if (!int.TryParse(seedInput.text.Trim(), out int seed)) { creationHint.text = "Seeds must be whole numbers."; return; }
-            if (WorldSaveRegistry.ContainsSeed(seed)) { creationHint.text = "That seed already belongs to another saved world."; return; }
-
-            SavedWorld world = new SavedWorld
+            GameSettings.Apply();
+            settings.Hide();
+            switch (settingsReturnState)
             {
-                id = Guid.NewGuid().ToString("N"), worldName = worldName, seed = seed, difficulty = selectedDifficulty,
-                createdUtc = DateTime.UtcNow.ToString("O"), lastPlayedUtc = DateTime.UtcNow.ToString("O")
-            };
-            WorldSaveRegistry.Save(world);
+                case GameFlowState.Paused:
+                case GameFlowState.Playing:
+                    state = GameFlowState.Paused;
+                    pause.Show();
+                    break;
+                default:
+                    ShowMainMenu();
+                    break;
+            }
+        }
+
+        public int NewUniqueSeed() => saves.GenerateUniqueSeed();
+        public bool IsSeedTaken(int seed) => saves.ContainsSeed(seed);
+
+        public void RequestDeleteWorld(SavedWorld world)
+        {
+            if (world == null) return;
+            confirm.Ask("Delete \"" + world.worldName + "\"?",
+                "This removes the saved world entry and its player progress. The seed " + world.seed + " can always recreate the same landscape.",
+                "DELETE", () =>
+                {
+                    saves.Delete(world.id);
+                    browser.SetHint("\"" + world.worldName + "\" was deleted.");
+                    browser.Populate(saves.LoadAll());
+                });
+        }
+
+        public void CreateWorld(string nameText, string seedText, string difficulty)
+        {
+            if (!WorldValidation.ValidateName(nameText, out string nameError))
+            {
+                creation.ShowError(nameError);
+                return;
+            }
+
+            int seed;
+            switch (WorldValidation.TryParseSeed(seedText, out seed))
+            {
+                case SeedParseStatus.Invalid:
+                    creation.ShowError("Seeds must be whole numbers or short text.");
+                    return;
+                case SeedParseStatus.Empty:
+                    seed = NewUniqueSeed();
+                    break;
+            }
+
+            if (saves.ContainsSeed(seed))
+            {
+                creation.ShowError("That seed already belongs to another saved world.");
+                return;
+            }
+
+            SavedWorld world = saves.CreateRecord(nameText, seed, difficulty);
+            if (!saves.TrySave(world, out string error))
+            {
+                creation.ShowError("Could not save the new world: " + error);
+                return;
+            }
+
             EnterWorld(world);
         }
 
+        // ------------------------------------------------------------------ loading and gameplay
+
         public void EnterWorld(SavedWorld world)
         {
-            if (generator == null) { selectionHint.text = "World generator is not present in this scene."; return; }
+            if (world == null || state == GameFlowState.Loading) return;
+            if (worldEntryRoutine != null) StopCoroutine(worldEntryRoutine);
+            HideAll();
             currentWorld = world;
-            currentWorld.lastPlayedUtc = DateTime.UtcNow.ToString("O");
-            WorldSaveRegistry.Save(currentWorld);
-            explorationWorldLabel.text = world.worldName + "  •  Seed " + world.seed + "  •  ESC: Save & return";
-            currentScreen = Screen.InWorld;
-            SetScreen(inWorldMenu);
-            StartCoroutine(GenerateAndEnter());
+            worldLoaded = false;
+            state = GameFlowState.Loading;
+            SetPlayerControl(false);
+            loading.Begin(world.worldName, world.seed);
+            loading.Show();
+            worldEntryRoutine = StartCoroutine(PrepareGameplayWorld(world));
         }
 
-        private IEnumerator GenerateAndEnter()
+        private IEnumerator PrepareGameplayWorld(SavedWorld world)
         {
-            yield return null;
-            generator.LoadWorldSeed(currentWorld.seed);
-            yield return null;
+            // The UI is persistent, while the generator and presentation belong to the gameplay scene.
+            // Loading that scene here keeps the browser independent of gameplay-only services.
+            if (!string.Equals(SceneManager.GetActiveScene().name, GameplaySceneName, StringComparison.Ordinal))
+            {
+                // GetSceneByName only reports already-loaded scenes. Build Settings registration is
+                // the contract needed before an async load, so use the streaming-level check here.
+                if (!Application.CanStreamedLevelBeLoaded(GameplaySceneName))
+                {
+                    OnWorldGenerationFailed(new InvalidOperationException("Gameplay scene '" + GameplaySceneName + "' is not registered in Build Settings."));
+                    worldEntryRoutine = null;
+                    yield break;
+                }
+
+                AsyncOperation load = SceneManager.LoadSceneAsync(GameplaySceneName, LoadSceneMode.Single);
+                if (load == null)
+                {
+                    OnWorldGenerationFailed(new InvalidOperationException("Gameplay scene '" + GameplaySceneName + "' could not be loaded."));
+                    worldEntryRoutine = null;
+                    yield break;
+                }
+
+                while (!load.isDone)
+                {
+                    if (state != GameFlowState.Loading || currentWorld != world) { worldEntryRoutine = null; yield break; }
+                    yield return null;
+                }
+            }
+
+            // Awake/Start ordering is not guaranteed when this persistent object and the scene load
+            // complete in adjacent frames. Wait for the scene-owned services instead of failing early.
+            const int maxResolveFrames = 300;
+            for (int i = 0; i < maxResolveFrames && generator == null; i++)
+            {
+                generator = FindAnyObjectByType<WorldGenerator>();
+                if (generator == null) yield return null;
+            }
+
+            if (presentation == null) presentation = FindAnyObjectByType<WorldPresentationController>();
+            if (generator == null)
+            {
+                OnWorldGenerationFailed(new InvalidOperationException("WorldGenerator was not found after the gameplay scene finished loading."));
+                worldEntryRoutine = null;
+                yield break;
+            }
+
+            if (developerOverlay != null) { developerOverlay.Generator = generator; developerOverlay.WorldName = world.worldName; }
+            worldEntryRoutine = null;
+            generator.GenerateWorldAsync(world.seed, report => { if (state == GameFlowState.Loading && currentWorld == world) loading.Report(report); }, OnWorldGenerated, OnWorldGenerationFailed);
+        }
+
+        public void CancelLoading()
+        {
+            if (state != GameFlowState.Loading) return;
+            if (worldEntryRoutine != null)
+            {
+                StopCoroutine(worldEntryRoutine);
+                worldEntryRoutine = null;
+            }
+            generator?.CancelGeneration();
+            currentWorld = null;
+            ShowWorldBrowser();
+        }
+
+        private void OnWorldGenerated(WorldBuildResult result)
+        {
+            if (state != GameFlowState.Loading || currentWorld == null) return;
+            FirstPersonExplorerController player = PlayerSpawner.Find();
+            if (player != null)
+            {
+                RestorePlayer(player, result);
+                presentation?.ApplyToCamera(player.ViewCamera);
+            }
+
+            GameSettings.Apply();
+            loading.SetDetail("Generated " + result.TotalTriangles.ToString("N0") + " triangles in " + result.Seconds.ToString("0.0") + " s.");
+            currentWorld.lastPlayedUtc = SavedWorld.FormatUtc(DateTime.UtcNow);
+            saves.TrySave(currentWorld, out _);
+            worldLoaded = true;
+            StartCoroutine(FadeIntoGameplay());
+        }
+
+        private void RestorePlayer(FirstPersonExplorerController player, WorldBuildResult result)
+        {
+            Vector3 target = result.SpawnPosition;
+            float yaw = 0f, pitch = 0f;
             if (currentWorld.hasVisited)
             {
-                GameObject player = GameObject.Find("SeedAndRock_Player");
-                if (player != null) player.transform.position = new Vector3(currentWorld.playerX, currentWorld.playerY, currentWorld.playerZ);
+                PlayerStateData saved = currentWorld.GetPlayerState();
+                Vector3 savedPosition = new Vector3(saved.x, saved.y, saved.z);
+                float half = result.Sampler.Settings.HalfSize;
+                bool inside = saved.IsFinite && Mathf.Abs(saved.x) < half && Mathf.Abs(saved.z) < half;
+                if (inside)
+                {
+                    // Saved positions come from the same seed, but settings may have changed since; snap to the current surface when far off.
+                    float ground = result.Sampler.GetHeightAt(saved.x, saved.z);
+                    if (Mathf.Abs(saved.y - ground) > 6f) savedPosition.y = ground + 0.2f;
+                    target = savedPosition;
+                    yaw = saved.yaw;
+                    pitch = saved.pitch;
+                }
             }
-            inWorldMenu.gameObject.SetActive(false);
-            dimmer.gameObject.SetActive(false);
-            explorationHud.gameObject.SetActive(true);
+
+            PlayerSpawner.Teleport(player, target, yaw, pitch);
+        }
+
+        private IEnumerator FadeIntoGameplay()
+        {
+            fader.SetOpaque();
+            loading.Hide(true);
+            yield return null;
+            state = GameFlowState.Playing;
+            SetPlayerControl(true);
+            hud.SetVisible(true);
+            hud.Toast(currentWorld.worldName + "  •  seed " + currentWorld.seed, 3.5f);
+            bool done = false;
+            fader.FadeIn(0.9f, () => done = true);
+            while (!done) yield return null;
+        }
+
+        private void OnWorldGenerationFailed(Exception exception)
+        {
+            if (exception is OperationCanceledException)
+            {
+                if (state == GameFlowState.Loading) ShowWorldBrowser();
+                return;
+            }
+
+            Debug.LogException(exception);
+            if (state != GameFlowState.Loading) return;
+            currentWorld = null;
+            loading.ShowError("Something went wrong while shaping this world: " + exception.Message);
+        }
+
+        public void PauseGame()
+        {
+            if (state != GameFlowState.Playing) return;
+            state = GameFlowState.Paused;
+            SetPlayerControl(false);
+            Time.timeScale = 0f;
+            pause.SetWorld(currentWorld.worldName, currentWorld.seed);
+            pause.SetStatus("Last saved " + TimeFormat.Relative(currentWorld.LastPlayedUtc, DateTime.UtcNow));
+            pause.Show();
+        }
+
+        public void ResumeGame()
+        {
+            if (state != GameFlowState.Paused) return;
+            pause.Hide();
+            Time.timeScale = 1f;
+            state = GameFlowState.Playing;
             SetPlayerControl(true);
         }
 
-        private void SaveCurrentWorld()
+        public void SaveFromPause()
         {
-            if (currentWorld == null || currentScreen != Screen.InWorld) return;
-            GameObject player = GameObject.Find("SeedAndRock_Player");
-            if (player != null)
+            if (SaveCurrentWorld(out string error))
+                pause.SetStatus("World saved just now.");
+            else
+                pause.SetStatus("Save failed: " + error);
+        }
+
+        public void SaveAndReturnToMainMenu()
+        {
+            SaveCurrentWorld();
+            Time.timeScale = 1f;
+            UnloadWorld();
+            ShowMainMenu();
+        }
+
+        public void QuitGame()
+        {
+            SaveCurrentWorld();
+            Time.timeScale = 1f;
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
+        }
+
+        private void UnloadWorld()
+        {
+            if (worldEntryRoutine != null)
             {
-                Vector3 position = player.transform.position;
-                currentWorld.playerX = position.x; currentWorld.playerY = position.y; currentWorld.playerZ = position.z;
-                currentWorld.hasVisited = true;
+                StopCoroutine(worldEntryRoutine);
+                worldEntryRoutine = null;
             }
-            currentWorld.lastPlayedUtc = DateTime.UtcNow.ToString("O");
-            WorldSaveRegistry.Save(currentWorld);
+            generator?.CancelGeneration();
+            worldLoaded = false;
+            currentWorld = null;
+            hud.SetVisible(false);
+            if (developerOverlay != null && developerOverlay.IsVisible) developerOverlay.Toggle();
+            generator?.ClearGeneratedWorld();
+        }
+
+        private void SaveCurrentWorld() => SaveCurrentWorld(out _);
+
+        private bool SaveCurrentWorld(out string error)
+        {
+            error = null;
+            if (currentWorld == null || !worldLoaded) return true;
+            // Application pause/quit can arrive during the first scene frame (or after a domain
+            // reload with Enter Play Mode options). Recreate the lightweight repository instead of
+            // allowing an otherwise valid world save to throw from the lifecycle callback.
+            if (saves == null) saves = new WorldSaveService();
+            WorldSaveService.CapturePlayer(currentWorld, PlayerSpawner.Find());
+            bool ok = saves.TrySave(currentWorld, out error);
+            if (ok && state == GameFlowState.Playing) hud?.Toast("World saved");
+            return ok;
         }
 
         private void SetPlayerControl(bool enabled)
         {
-            FirstPersonExplorerController controller = FindFirstObjectByType<FirstPersonExplorerController>(FindObjectsInactive.Include);
+            FirstPersonExplorerController controller = PlayerSpawner.Find();
             if (controller != null) controller.enabled = enabled;
             Cursor.lockState = enabled ? CursorLockMode.Locked : CursorLockMode.None;
             Cursor.visible = !enabled;
         }
 
+        private void HideAll(bool keepPause = false)
+        {
+            mainMenu.Hide();
+            browser.Hide();
+            creation.Hide();
+            loading.Hide();
+            settings.Hide();
+            confirm.Hide(true);
+            if (!keepPause) pause.Hide();
+        }
+
+        // ------------------------------------------------------------------ canvas
+
         private void BuildCanvas()
         {
-            if (GameObject.Find(CanvasName) != null) return;
+            GameObject existing = GameObject.Find(CanvasName);
+            if (existing != null) Destroy(existing);
+
             GameObject root = new GameObject(CanvasName, typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
-            canvas = root.GetComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay; canvas.sortingOrder = 50;
-            CanvasScaler scaler = root.GetComponent<CanvasScaler>(); scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize; scaler.referenceResolution = new Vector2(1920f, 1080f); scaler.matchWidthOrHeight = 0.5f;
-            if (FindFirstObjectByType<EventSystem>() == null)
+            root.layer = LayerMask.NameToLayer("UI");
+            DontDestroyOnLoad(root);
+            Canvas canvas = root.GetComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = 50;
+            CanvasScaler scaler = root.GetComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.matchWidthOrHeight = 0.5f;
+
+            if (FindAnyObjectByType<EventSystem>() == null)
             {
                 GameObject events = new GameObject("EventSystem", typeof(EventSystem), typeof(InputSystemUIInputModule));
                 DontDestroyOnLoad(events);
             }
 
-            dimmer = CreateImage(root.transform, "Atmosphere", new Color(0.01f, 0.035f, 0.045f, 0.83f), Stretch());
-            mainMenu = BuildMainMenu(root.transform);
-            selectionMenu = BuildWorldSelection(root.transform);
-            creationMenu = BuildWorldCreation(root.transform);
-            inWorldMenu = BuildInWorldMenu(root.transform);
-            explorationHud = BuildExplorationHud(root.transform);
+            Transform parent = root.transform;
+            hud = new HudOverlay(parent);
+            mainMenu = new MainMenuScreen(this, parent);
+            browser = new WorldBrowserScreen(this, parent);
+            creation = new CreateWorldScreen(this, parent);
+            loading = new LoadingScreen(this, parent);
+            pause = new PauseMenuScreen(this, parent);
+            settings = new SettingsScreen(this, parent);
+            confirm = new ConfirmDialog(this, parent);
+            developerOverlay = DeveloperOverlay.Create(parent);
+            fader = new ScreenFader(this, parent);
         }
-
-        private RectTransform BuildMainMenu(Transform parent)
-        {
-            RectTransform screen = CreatePanel(parent, "MainMenu", night, Stretch());
-            CreateText(screen, "SEED & ROCK", 72, pale, new Vector2(0.5f, 0.70f), new Vector2(760f, 105f), FontStyles.Bold);
-            CreateText(screen, "A WORLD MADE YOUR WAY", 19, teal, new Vector2(0.5f, 0.61f), new Vector2(500f, 38f), FontStyles.Bold);
-            CreateText(screen, "Explore one enduring world, shaped by your seed.", 22, new Color(0.66f, 0.77f, 0.75f), new Vector2(0.5f, 0.555f), new Vector2(620f, 40f));
-            MakeButton(screen, "PlayButton", "PLAY", teal, new Vector2(0.5f, 0.405f), new Vector2(390f, 76f), ShowWorldSelection);
-            MakeButton(screen, "QuitButton", "QUIT", new Color(0.16f, 0.25f, 0.27f), new Vector2(0.5f, 0.315f), new Vector2(390f, 58f), Application.Quit);
-            CreateText(screen, "Each saved world is a deterministic landscape: your seed always leads home.", 15, new Color(0.50f, 0.63f, 0.62f), new Vector2(0.5f, 0.10f), new Vector2(900f, 32f));
-            return screen;
-        }
-
-        private RectTransform BuildWorldSelection(Transform parent)
-        {
-            RectTransform screen = CreatePanel(parent, "WorldSelection", night, Stretch());
-            CreateText(screen, "YOUR WORLDS", 42, pale, new Vector2(0.5f, 0.87f), new Vector2(760f, 64f), FontStyles.Bold);
-            selectionHint = CreateText(screen, "Choose a landscape to continue your journey.", 18, new Color(0.62f, 0.76f, 0.73f), new Vector2(0.5f, 0.815f), new Vector2(760f, 36f));
-            RectTransform list = CreatePanel(screen, "WorldListFrame", panel, Anchored(new Vector2(0.5f, 0.45f), new Vector2(860f, 560f)));
-            worldListContent = CreateScrollView(list, "WorldScrollView");
-            MakeButton(screen, "CreateNewWorldButton", "+  CREATE NEW WORLD", gold, new Vector2(0.5f, 0.105f), new Vector2(390f, 64f), ShowWorldCreation);
-            MakeButton(screen, "BackToMainButton", "BACK", new Color(0.14f, 0.24f, 0.25f), new Vector2(0.12f, 0.105f), new Vector2(185f, 54f), ShowMainMenu);
-            return screen;
-        }
-
-        private RectTransform BuildWorldCreation(Transform parent)
-        {
-            RectTransform screen = CreatePanel(parent, "WorldCreation", night, Stretch());
-            RectTransform card = CreatePanel(screen, "CreationCard", panel, Anchored(new Vector2(0.5f, 0.50f), new Vector2(760f, 680f)));
-            CreateText(card, "CREATE NEW WORLD", 38, pale, new Vector2(0.5f, 0.89f), new Vector2(670f, 55f), FontStyles.Bold);
-            CreateText(card, "WORLD NAME", 15, teal, new Vector2(0.15f, 0.755f), new Vector2(250f, 28f), FontStyles.Bold, TextAlignmentOptions.Left);
-            nameInput = CreateInput(card, "WorldNameInput", new Vector2(0.5f, 0.69f), "New World");
-            CreateText(card, "WORLD SEED", 15, teal, new Vector2(0.15f, 0.565f), new Vector2(250f, 28f), FontStyles.Bold, TextAlignmentOptions.Left);
-            seedInput = CreateInput(card, "WorldSeedInput", new Vector2(0.5f, 0.50f), "A unique seed will be generated", TMP_InputField.ContentType.IntegerNumber);
-            MakeButton(card, "RandomSeedButton", "RANDOMIZE", new Color(0.13f, 0.31f, 0.31f), new Vector2(0.72f, 0.39f), new Vector2(205f, 46f), GenerateAnotherSeed, 15);
-            Button difficulty = MakeButton(card, "DifficultyButton", "Difficulty: Normal", new Color(0.17f, 0.28f, 0.31f), new Vector2(0.50f, 0.29f), new Vector2(510f, 60f), CycleDifficulty, 19);
-            difficultyText = difficulty.GetComponentInChildren<TMP_Text>();
-            creationHint = CreateText(card, "", 14, new Color(0.78f, 0.84f, 0.74f), new Vector2(0.5f, 0.19f), new Vector2(610f, 30f));
-            MakeButton(card, "ConfirmCreateWorldButton", "CREATE WORLD", teal, new Vector2(0.5f, 0.095f), new Vector2(400f, 60f), CreateWorld, 20);
-            MakeButton(screen, "BackToWorldSelectionButton", "BACK", new Color(0.14f, 0.24f, 0.25f), new Vector2(0.12f, 0.105f), new Vector2(185f, 54f), ShowWorldSelection);
-            return screen;
-        }
-
-        private RectTransform BuildInWorldMenu(Transform parent)
-        {
-            RectTransform screen = CreatePanel(parent, "GeneratingWorld", new Color(0.01f, 0.035f, 0.045f, 0.93f), Stretch());
-            CreateText(screen, "SHAPING YOUR WORLD", 40, pale, new Vector2(0.5f, 0.54f), new Vector2(700f, 60f), FontStyles.Bold);
-            CreateText(screen, "Reading the seed and growing its landscape…", 20, new Color(0.66f, 0.78f, 0.76f), new Vector2(0.5f, 0.47f), new Vector2(700f, 35f));
-            return screen;
-        }
-
-        private RectTransform BuildExplorationHud(Transform parent)
-        {
-            RectTransform hud = CreatePanel(parent, "ExplorationHud", new Color(0.02f, 0.07f, 0.08f, 0.80f), Anchored(new Vector2(0.5f, 0.965f), new Vector2(720f, 44f)));
-            explorationWorldLabel = CreateText(hud, "WorldLabel", 15, new Color(0.80f, 0.92f, 0.88f), new Vector2(0.5f, 0.5f), new Vector2(690f, 38f), FontStyles.Bold);
-            hud.gameObject.SetActive(false);
-            return hud;
-        }
-
-        private void PopulateWorldList()
-        {
-            for (int i = worldListContent.childCount - 1; i >= 0; i--) Destroy(worldListContent.GetChild(i).gameObject);
-            List<SavedWorld> worlds = WorldSaveRegistry.Load();
-            worlds.Sort((left, right) => string.Compare(right.lastPlayedUtc, left.lastPlayedUtc, StringComparison.Ordinal));
-            if (worlds.Count == 0)
-            {
-                CreateText(worldListContent, "No worlds yet — create one and make it your own.", 19, new Color(0.62f, 0.72f, 0.70f), Vector2.zero, new Vector2(760f, 88f));
-                return;
-            }
-            foreach (SavedWorld world in worlds)
-            {
-                SavedWorld captured = world;
-                Button button = MakeButton(worldListContent, "World_" + world.id, "", new Color(0.09f, 0.20f, 0.21f), Vector2.zero, new Vector2(760f, 94f), () => EnterWorld(captured));
-                LayoutElement layout = button.gameObject.AddComponent<LayoutElement>(); layout.preferredHeight = 94f;
-                TMP_Text label = button.GetComponentInChildren<TMP_Text>();
-                label.alignment = TextAlignmentOptions.Left;
-                label.margin = new Vector4(28f, 0f, 16f, 0f);
-                label.text = "<b>" + Escape(world.worldName) + "</b>\n<size=15><color=#9DC9C0>Seed " + world.seed + "   •   " + Escape(world.difficulty) + "   •   " + (world.hasVisited ? "Explored" : "New") + "</color></size>";
-            }
-        }
-
-        private void SetScreen(RectTransform active)
-        {
-            dimmer.gameObject.SetActive(active != inWorldMenu || inWorldMenu.gameObject.activeSelf);
-            if (active != inWorldMenu) explorationHud.gameObject.SetActive(false);
-            mainMenu.gameObject.SetActive(active == mainMenu);
-            selectionMenu.gameObject.SetActive(active == selectionMenu);
-            creationMenu.gameObject.SetActive(active == creationMenu);
-            inWorldMenu.gameObject.SetActive(active == inWorldMenu);
-        }
-
-        private RectTransform CreateScrollView(Transform parent, string name)
-        {
-            GameObject root = new GameObject(name, typeof(RectTransform), typeof(ScrollRect));
-            root.transform.SetParent(parent, false); RectTransform rootRect = root.GetComponent<RectTransform>(); ApplyRect(rootRect, Stretch(new Vector2(24f, 24f), new Vector2(-24f, -24f)));
-            GameObject viewport = new GameObject("Viewport", typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(Mask));
-            viewport.transform.SetParent(root.transform, false); RectTransform viewportRect = viewport.GetComponent<RectTransform>(); ApplyRect(viewportRect, Stretch()); viewport.GetComponent<UnityEngine.UI.Image>().color = new Color(0f, 0f, 0f, 0.01f); viewport.GetComponent<Mask>().showMaskGraphic = false;
-            GameObject content = new GameObject("Content", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
-            content.transform.SetParent(viewport.transform, false); RectTransform contentRect = content.GetComponent<RectTransform>(); contentRect.anchorMin = new Vector2(0f, 1f); contentRect.anchorMax = new Vector2(1f, 1f); contentRect.pivot = new Vector2(0.5f, 1f); contentRect.anchoredPosition = Vector2.zero; contentRect.sizeDelta = new Vector2(0f, 1f);
-            VerticalLayoutGroup group = content.GetComponent<VerticalLayoutGroup>(); group.padding = new RectOffset(4, 4, 4, 4); group.spacing = 12f; group.childControlWidth = true; group.childControlHeight = false; group.childForceExpandWidth = true; group.childForceExpandHeight = false;
-            content.GetComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-            ScrollRect scroll = root.GetComponent<ScrollRect>(); scroll.viewport = viewportRect; scroll.content = contentRect; scroll.horizontal = false; scroll.movementType = ScrollRect.MovementType.Clamped; scroll.scrollSensitivity = 28f;
-            return contentRect;
-        }
-
-        private TMP_InputField CreateInput(Transform parent, string name, Vector2 anchor, string placeholder, TMP_InputField.ContentType type = TMP_InputField.ContentType.Standard)
-        {
-            GameObject root = new GameObject(name, typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(TMP_InputField)); root.transform.SetParent(parent, false);
-            RectTransform rootRect = root.GetComponent<RectTransform>(); rootRect.anchorMin = rootRect.anchorMax = anchor; rootRect.pivot = new Vector2(0.5f, 0.5f); rootRect.sizeDelta = new Vector2(510f, 62f);
-            root.GetComponent<UnityEngine.UI.Image>().color = new Color(0.025f, 0.070f, 0.078f, 1f);
-            TMP_InputField input = root.GetComponent<TMP_InputField>(); input.contentType = type; input.caretColor = pale; input.selectionColor = new Color(teal.r, teal.g, teal.b, 0.35f);
-            RectTransform textRect = CreateText(root.transform, "Text", 20, pale, Vector2.zero, new Vector2(480f, 45f), FontStyles.Normal, TextAlignmentOptions.Left).rectTransform; textRect.anchorMin = textRect.anchorMax = new Vector2(0.5f, 0.5f); textRect.offsetMin = new Vector2(-230f, -22f); textRect.offsetMax = new Vector2(230f, 22f);
-            TMP_Text text = textRect.GetComponent<TMP_Text>(); text.textWrappingMode = TextWrappingModes.NoWrap;
-            TMP_Text hint = CreateText(root.transform, "Placeholder", 19, new Color(0.44f, 0.57f, 0.56f), Vector2.zero, new Vector2(480f, 45f), FontStyles.Italic, TextAlignmentOptions.Left); hint.text = placeholder; RectTransform hintRect = hint.rectTransform; hintRect.anchorMin = hintRect.anchorMax = new Vector2(0.5f, 0.5f); hintRect.offsetMin = new Vector2(-230f, -22f); hintRect.offsetMax = new Vector2(230f, 22f);
-            input.textComponent = text; input.placeholder = hint; input.textViewport = rootRect;
-            return input;
-        }
-
-        private Button MakeButton(Transform parent, string name, string caption, Color color, Vector2 anchor, Vector2 size, UnityEngine.Events.UnityAction action, int fontSize = 22)
-        {
-            GameObject root = new GameObject(name, typeof(RectTransform), typeof(UnityEngine.UI.Image), typeof(Button)); root.transform.SetParent(parent, false);
-            RectTransform rect = root.GetComponent<RectTransform>(); rect.anchorMin = rect.anchorMax = anchor; rect.pivot = new Vector2(0.5f, 0.5f); rect.sizeDelta = size;
-            UnityEngine.UI.Image image = root.GetComponent<UnityEngine.UI.Image>(); image.color = color;
-            Button button = root.GetComponent<Button>(); button.targetGraphic = image; button.onClick.AddListener(action);
-            ColorBlock colors = button.colors; colors.normalColor = Color.white; colors.highlightedColor = new Color(1.08f, 1.08f, 1.08f, 1f); colors.pressedColor = new Color(0.78f, 0.78f, 0.78f, 1f); colors.selectedColor = colors.highlightedColor; button.colors = colors;
-            TMP_Text label = CreateText(root.transform, "Label", fontSize, color.grayscale > 0.6f ? night : pale, Vector2.zero, size, FontStyles.Bold); label.text = caption; label.raycastTarget = false;
-            return button;
-        }
-
-        private TMP_Text CreateText(Transform parent, string name, float size, Color color, Vector2 anchor, Vector2 dimensions, FontStyles style = FontStyles.Normal, TextAlignmentOptions alignment = TextAlignmentOptions.Center)
-        {
-            GameObject root = new GameObject(name, typeof(RectTransform), typeof(TextMeshProUGUI)); root.transform.SetParent(parent, false);
-            RectTransform rect = root.GetComponent<RectTransform>(); rect.anchorMin = rect.anchorMax = anchor; rect.pivot = new Vector2(0.5f, 0.5f); rect.sizeDelta = dimensions;
-            TextMeshProUGUI text = root.GetComponent<TextMeshProUGUI>(); text.font = TMP_Settings.defaultFontAsset; text.fontSize = size; text.color = color; text.fontStyle = style; text.alignment = alignment; text.raycastTarget = false; text.overflowMode = TextOverflowModes.Ellipsis;
-            return text;
-        }
-
-        private UnityEngine.UI.Image CreateImage(Transform parent, string name, Color color, RectSetup setup)
-        {
-            GameObject root = new GameObject(name, typeof(RectTransform), typeof(UnityEngine.UI.Image)); root.transform.SetParent(parent, false); ApplyRect(root.GetComponent<RectTransform>(), setup); UnityEngine.UI.Image image = root.GetComponent<UnityEngine.UI.Image>(); image.color = color; image.raycastTarget = false; return image;
-        }
-
-        private RectTransform CreatePanel(Transform parent, string name, Color color, RectSetup setup)
-        {
-            GameObject root = new GameObject(name, typeof(RectTransform), typeof(UnityEngine.UI.Image)); root.transform.SetParent(parent, false); ApplyRect(root.GetComponent<RectTransform>(), setup); UnityEngine.UI.Image image = root.GetComponent<UnityEngine.UI.Image>(); image.color = color; image.raycastTarget = false; return root.GetComponent<RectTransform>();
-        }
-
-        private readonly struct RectSetup { public readonly Vector2 min, max, offsetMin, offsetMax; public RectSetup(Vector2 min, Vector2 max, Vector2 offsetMin, Vector2 offsetMax) { this.min = min; this.max = max; this.offsetMin = offsetMin; this.offsetMax = offsetMax; } }
-        private static RectSetup Stretch(Vector2? min = null, Vector2? max = null) => new RectSetup(Vector2.zero, Vector2.one, min ?? Vector2.zero, max ?? Vector2.zero);
-        private static RectSetup Anchored(Vector2 anchor, Vector2 size) => new RectSetup(anchor, anchor, -size * 0.5f, size * 0.5f);
-        private static void ApplyRect(RectTransform rect, RectSetup setup) { rect.anchorMin = setup.min; rect.anchorMax = setup.max; rect.offsetMin = setup.offsetMin; rect.offsetMax = setup.offsetMax; }
-        private static string Escape(string value) => value.Replace("<", "&lt;").Replace(">", "&gt;");
     }
 
     internal static class SeedAndRockGameBootstrap
@@ -422,7 +513,7 @@ namespace SeedAndRock.UI
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void Bootstrap()
         {
-            if (UnityEngine.Object.FindFirstObjectByType<SeedAndRockGameFlow>() != null) return;
+            if (UnityEngine.Object.FindAnyObjectByType<SeedAndRockGameFlow>() != null) return;
             new GameObject("SeedAndRock_GameFlow").AddComponent<SeedAndRockGameFlow>();
         }
     }

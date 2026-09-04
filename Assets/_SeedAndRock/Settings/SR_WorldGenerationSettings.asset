@@ -11,36 +11,68 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 57af2cca7b040684eb99b6579390ea8f, type: 3}
   m_Name: SR_WorldGenerationSettings
-  m_EditorClassIdentifier: Assembly-CSharp::SeedAndRock.World.WorldGenerationSettings
+  m_EditorClassIdentifier: 
   seed: 240613
   generateOnPlay: 1
-  worldSize: 220
-  terrainResolution: 129
-  terrainHeight: 34
+  worldSize: 1000
+  terrainResolution: 257
+  terrainChunks: 4
+  terrainHeight: 64
   waterLevel: 3.5
-  continentFrequency: 0.011
-  detailFrequency: 0.045
+  continentFrequency: 0.0032
+  detailFrequency: 0.02
   terrainOctaves: 4
-  forestMoistureThreshold: 0.53
-  highlandHeightThreshold: 0.64
-  grassSpacing: 1.9
-  globalDressingDensity: 0.82
-  waterResolution: 72
+  mountainCoverage: 0.22
+  plainsCoverage: 0.45
+  forestMoistureThreshold: 0.58
+  highlandHeightThreshold: 0.62
+  hydrologyResolution: 192
+  riverCatchmentCells: 180
+  riverMinWidth: 2.6
+  riverMaxWidth: 9
+  riverDepth: 1.6
+  lakeMinDepth: 1.1
+  lakeMinCells: 6
+  grassSpacing: 2.4
+  dressingSpacing: 6
+  globalDressingDensity: 1
+  maxGrassBlades: 70000
+  maxTrees: 9000
+  maxRocks: 6000
+  waterResolution: 320
+  plains:
+    grassDensity: 0.7
+    treeDensity: 0.025
+    rockDensity: 0.03
+    terrainTint: {r: 0.46, g: 0.62, b: 0.26, a: 1}
+    grassTint: {r: 0.56, g: 0.74, b: 0.3, a: 1}
   grassland:
-    grassDensity: 0.84
-    treeDensity: 0.05
+    grassDensity: 0.8
+    treeDensity: 0.07
     rockDensity: 0.08
-    terrainTint: {r: 0.36, g: 0.54, b: 0.2, a: 1}
-    grassTint: {r: 0.45, g: 0.72, b: 0.24, a: 1}
+    terrainTint: {r: 0.37, g: 0.54, b: 0.22, a: 1}
+    grassTint: {r: 0.45, g: 0.7, b: 0.26, a: 1}
   forest:
-    grassDensity: 0.62
-    treeDensity: 0.34
-    rockDensity: 0.13
-    terrainTint: {r: 0.24, g: 0.43, b: 0.18, a: 1}
-    grassTint: {r: 0.28, g: 0.56, b: 0.2, a: 1}
+    grassDensity: 0.55
+    treeDensity: 0.42
+    rockDensity: 0.1
+    terrainTint: {r: 0.25, g: 0.42, b: 0.19, a: 1}
+    grassTint: {r: 0.3, g: 0.55, b: 0.22, a: 1}
+  desert:
+    grassDensity: 0.06
+    treeDensity: 0.01
+    rockDensity: 0.1
+    terrainTint: {r: 0.76, g: 0.63, b: 0.38, a: 1}
+    grassTint: {r: 0.7, g: 0.62, b: 0.3, a: 1}
+  snow:
+    grassDensity: 0.08
+    treeDensity: 0.09
+    rockDensity: 0.16
+    terrainTint: {r: 0.86, g: 0.9, b: 0.92, a: 1}
+    grassTint: {r: 0.55, g: 0.66, b: 0.55, a: 1}
   highlands:
-    grassDensity: 0.16
-    treeDensity: 0.02
-    rockDensity: 0.42
-    terrainTint: {r: 0.4, g: 0.4, b: 0.36, a: 1}
-    grassTint: {r: 0.42, g: 0.51, b: 0.28, a: 1}
+    grassDensity: 0.14
+    treeDensity: 0.03
+    rockDensity: 0.4
+    terrainTint: {r: 0.44, g: 0.43, b: 0.39, a: 1}
+    grassTint: {r: 0.44, g: 0.53, b: 0.31, a: 1}
