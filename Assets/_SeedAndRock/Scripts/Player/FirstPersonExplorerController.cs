@@ -27,6 +27,16 @@ namespace SeedAndRock.Player
         private float pitch;
         private float verticalVelocity;
 
+        /// <summary>Multiplier applied to look sensitivity (driven by the settings screen).</summary>
+        public static float LookSensitivityScale = 1f;
+
+        /// <summary>Horizontal view angle in degrees.</summary>
+        public float Yaw => transform.eulerAngles.y;
+        /// <summary>Vertical view angle in degrees (negative looks up).</summary>
+        public float Pitch => pitch;
+        public bool IsGrounded => controller != null && controller.isGrounded;
+        public Camera ViewCamera => viewCamera;
+
         private void Awake()
         {
             controller = GetComponent<CharacterController>();
@@ -40,7 +50,7 @@ namespace SeedAndRock.Player
             if (viewCamera != null)
             {
                 viewCamera.transform.localPosition = new Vector3(0f, cameraHeight, 0f);
-                viewCamera.transform.localRotation = Quaternion.identity;
+                viewCamera.transform.localRotation = Quaternion.Euler(pitch, 0f, 0f);
             }
 
             moveAction = new InputAction("Move", InputActionType.Value);
@@ -68,8 +78,6 @@ namespace SeedAndRock.Player
             lookAction?.Enable();
             sprintAction?.Enable();
             jumpAction?.Enable();
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
         }
 
         private void OnDisable()
@@ -94,12 +102,23 @@ namespace SeedAndRock.Player
             UpdateMovement();
         }
 
+        /// <summary>Sets the view orientation directly (used when restoring a saved position).</summary>
+        public void SetView(float yaw, float newPitch)
+        {
+            transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+            pitch = Mathf.Clamp(newPitch, -85f, 85f);
+            if (viewCamera == null) viewCamera = GetComponentInChildren<Camera>();
+            if (viewCamera != null) viewCamera.transform.localRotation = Quaternion.Euler(pitch, 0f, 0f);
+        }
+
+        public void ResetVelocity() => verticalVelocity = 0f;
+
         private void UpdateLook()
         {
             if (viewCamera == null)
                 return;
 
-            Vector2 look = lookAction.ReadValue<Vector2>() * lookSensitivity;
+            Vector2 look = lookAction.ReadValue<Vector2>() * (lookSensitivity * LookSensitivityScale);
             pitch = Mathf.Clamp(pitch - look.y, -85f, 85f);
             transform.Rotate(Vector3.up * look.x);
             viewCamera.transform.localRotation = Quaternion.Euler(pitch, 0f, 0f);

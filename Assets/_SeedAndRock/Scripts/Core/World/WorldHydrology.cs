@@ -98,15 +98,29 @@ namespace SeedAndRock.World
         private static readonly int[] NeighbourDx = { 1, 1, 0, -1, -1, -1, 0, 1 };
         private static readonly int[] NeighbourDz = { 0, 1, 1, 1, 0, -1, -1, -1 };
 
-        public static HydrologyField Build(WorldSettingsData settings, TerrainField terrain)
+        public const int StepHeightsSampled = 1;
+        public const int StepDepressionsFilled = 2;
+        public const int StepFlowRouted = 3;
+        public const int StepLakesDetected = 4;
+        public const int StepRiversTraced = 5;
+        public const int StepComplete = 6;
+
+        /// <param name="onStep">Optional callback receiving the Step* constants as each phase finishes (may be called from a worker thread).</param>
+        public static HydrologyField Build(WorldSettingsData settings, TerrainField terrain, Action<int> onStep = null)
         {
             HydrologyField field = new HydrologyField(settings.hydrologyResolution, settings.worldSize);
             SampleBaseHeights(field, terrain);
+            onStep?.Invoke(StepHeightsSampled);
             FillDepressions(field, settings.waterLevel);
+            onStep?.Invoke(StepDepressionsFilled);
             int[] flowTarget = ComputeFlow(field);
+            onStep?.Invoke(StepFlowRouted);
             DetectLakes(field, settings);
+            onStep?.Invoke(StepLakesDetected);
             TraceRivers(field, flowTarget, settings);
+            onStep?.Invoke(StepRiversTraced);
             BuildDistanceFields(field);
+            onStep?.Invoke(StepComplete);
             return field;
         }
 
