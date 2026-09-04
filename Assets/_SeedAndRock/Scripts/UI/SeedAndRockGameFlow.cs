@@ -9,6 +9,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
+using UnityEngine.SceneManagement;
 
 namespace SeedAndRock.UI
 {
@@ -53,6 +54,9 @@ namespace SeedAndRock.UI
         private GameFlowState settingsReturnState = GameFlowState.MainMenu;
         private SavedWorld currentWorld;
         private bool worldLoaded;
+        private Coroutine worldEntryRoutine;
+
+        private const string GameplaySceneName = "World";
 
         public GameFlowState State => state;
         public SavedWorld CurrentWorld => currentWorld;
@@ -62,6 +66,11 @@ namespace SeedAndRock.UI
             if (Instance != null) { Destroy(gameObject); return; }
             Instance = this;
             DontDestroyOnLoad(gameObject);
+        }
+
+        private void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
         }
 
         private IEnumerator Start()
@@ -217,17 +226,8 @@ namespace SeedAndRock.UI
 
         public void EnterWorld(SavedWorld world)
         {
-            if (world == null) return;
-            // WorldSceneBootstrap and this persistent UI can initialize in either order after a scene load.
-            // Resolve again at the point it is needed so a valid saved world never gets stranded in Create World.
-            if (generator == null) generator = FindAnyObjectByType<WorldGenerator>();
-            if (presentation == null) presentation = FindAnyObjectByType<WorldPresentationController>();
-            if (generator == null)
-            {
-                browser.SetHint("World generator is not present in this scene.");
-                return;
-            }
-
+            if (world == null || state == GameFlowState.Loading) return;
+            if (worldEntryRoutine != null) StopCoroutine(worldEntryRoutine);
             HideAll();
             currentWorld = world;
             worldLoaded = false;
@@ -235,14 +235,70 @@ namespace SeedAndRock.UI
             SetPlayerControl(false);
             loading.Begin(world.worldName, world.seed);
             loading.Show();
+            worldEntryRoutine = StartCoroutine(PrepareGameplayWorld(world));
+        }
+
+        private IEnumerator PrepareGameplayWorld(SavedWorld world)
+        {
+            // The UI is persistent, while the generator and presentation belong to the gameplay scene.
+            // Loading that scene here keeps the browser independent of gameplay-only services.
+            if (!string.Equals(SceneManager.GetActiveScene().name, GameplaySceneName, StringComparison.Ordinal))
+            {
+                // GetSceneByName only reports already-loaded scenes. Build Settings registration is
+                // the contract needed before an async load, so use the streaming-level check here.
+                if (!Application.CanStreamedLevelBeLoaded(GameplaySceneName))
+                {
+                    OnWorldGenerationFailed(new InvalidOperationException("Gameplay scene '" + GameplaySceneName + "' is not registered in Build Settings."));
+                    worldEntryRoutine = null;
+                    yield break;
+                }
+
+                AsyncOperation load = SceneManager.LoadSceneAsync(GameplaySceneName, LoadSceneMode.Single);
+                if (load == null)
+                {
+                    OnWorldGenerationFailed(new InvalidOperationException("Gameplay scene '" + GameplaySceneName + "' could not be loaded."));
+                    worldEntryRoutine = null;
+                    yield break;
+                }
+
+                while (!load.isDone)
+                {
+                    if (state != GameFlowState.Loading || currentWorld != world) { worldEntryRoutine = null; yield break; }
+                    yield return null;
+                }
+            }
+
+            // Awake/Start ordering is not guaranteed when this persistent object and the scene load
+            // complete in adjacent frames. Wait for the scene-owned services instead of failing early.
+            const int maxResolveFrames = 300;
+            for (int i = 0; i < maxResolveFrames && generator == null; i++)
+            {
+                generator = FindAnyObjectByType<WorldGenerator>();
+                if (generator == null) yield return null;
+            }
+
+            if (presentation == null) presentation = FindAnyObjectByType<WorldPresentationController>();
+            if (generator == null)
+            {
+                OnWorldGenerationFailed(new InvalidOperationException("WorldGenerator was not found after the gameplay scene finished loading."));
+                worldEntryRoutine = null;
+                yield break;
+            }
+
             if (developerOverlay != null) { developerOverlay.Generator = generator; developerOverlay.WorldName = world.worldName; }
-            generator.GenerateWorldAsync(world.seed, report => { if (state == GameFlowState.Loading) loading.Report(report); }, OnWorldGenerated, OnWorldGenerationFailed);
+            worldEntryRoutine = null;
+            generator.GenerateWorldAsync(world.seed, report => { if (state == GameFlowState.Loading && currentWorld == world) loading.Report(report); }, OnWorldGenerated, OnWorldGenerationFailed);
         }
 
         public void CancelLoading()
         {
             if (state != GameFlowState.Loading) return;
-            generator.CancelGeneration();
+            if (worldEntryRoutine != null)
+            {
+                StopCoroutine(worldEntryRoutine);
+                worldEntryRoutine = null;
+            }
+            generator?.CancelGeneration();
             currentWorld = null;
             ShowWorldBrowser();
         }
@@ -366,6 +422,12 @@ namespace SeedAndRock.UI
 
         private void UnloadWorld()
         {
+            if (worldEntryRoutine != null)
+            {
+                StopCoroutine(worldEntryRoutine);
+                worldEntryRoutine = null;
+            }
+            generator?.CancelGeneration();
             worldLoaded = false;
             currentWorld = null;
             hud.SetVisible(false);
@@ -379,9 +441,13 @@ namespace SeedAndRock.UI
         {
             error = null;
             if (currentWorld == null || !worldLoaded) return true;
+            // Application pause/quit can arrive during the first scene frame (or after a domain
+            // reload with Enter Play Mode options). Recreate the lightweight repository instead of
+            // allowing an otherwise valid world save to throw from the lifecycle callback.
+            if (saves == null) saves = new WorldSaveService();
             WorldSaveService.CapturePlayer(currentWorld, PlayerSpawner.Find());
             bool ok = saves.TrySave(currentWorld, out error);
-            if (ok && state == GameFlowState.Playing) hud.Toast("World saved");
+            if (ok && state == GameFlowState.Playing) hud?.Toast("World saved");
             return ok;
         }
 

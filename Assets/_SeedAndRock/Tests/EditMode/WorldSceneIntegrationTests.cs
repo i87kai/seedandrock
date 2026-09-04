@@ -20,6 +20,7 @@ namespace SeedAndRock.Tests
 
             bool hasWorldGenerator = false;
             bool hasPresentation = false;
+            Component generator = null;
             Component volume = null;
             foreach (GameObject root in scene.GetRootGameObjects())
             {
@@ -31,7 +32,11 @@ namespace SeedAndRock.Tests
                     {
                         if (component == null) continue;
                         string typeName = component.GetType().FullName;
-                        hasWorldGenerator |= typeName == "SeedAndRock.World.WorldGenerator";
+                        if (typeName == "SeedAndRock.World.WorldGenerator")
+                        {
+                            hasWorldGenerator = true;
+                            generator = component;
+                        }
                         hasPresentation |= typeName == "SeedAndRock.World.WorldPresentationController";
                         if (typeName == "UnityEngine.Rendering.Volume") volume = component;
                     }
@@ -40,10 +45,34 @@ namespace SeedAndRock.Tests
 
             Assert.That(hasWorldGenerator, Is.True, "World scene has no WorldGenerator.");
             Assert.That(hasPresentation, Is.True, "World scene has no WorldPresentationController.");
+            Assert.That(generator, Is.Not.Null);
+            SerializedObject generatorObject = new SerializedObject(generator);
+            foreach (string propertyName in new[] { "settings", "terrainMaterial", "grassMaterial", "waterMaterial", "trunkMaterial", "foliageMaterial", "rockMaterial" })
+            {
+                SerializedProperty property = generatorObject.FindProperty(propertyName);
+                Assert.That(property, Is.Not.Null, "WorldGenerator is missing serialized field " + propertyName + ".");
+                Assert.That(property.objectReferenceValue, Is.Not.Null, "WorldGenerator field " + propertyName + " is not assigned.");
+            }
             Assert.That(volume, Is.Not.Null, "World scene has no Volume.");
             SerializedProperty profile = new SerializedObject(volume).FindProperty("sharedProfile");
             Assert.That(profile, Is.Not.Null, "World Volume has no profile property.");
             Assert.That(profile.objectReferenceValue, Is.Not.Null, "World Volume has no assigned profile.");
+        }
+
+        [Test]
+        public void WorldSceneIsEnabledInBuildSettings()
+        {
+            EditorBuildSettingsScene[] scenes = EditorBuildSettings.scenes;
+            bool found = false;
+            foreach (EditorBuildSettingsScene scene in scenes)
+            {
+                if (scene.path != WorldScenePath) continue;
+                found = true;
+                Assert.That(scene.enabled, Is.True, "World scene is disabled in Build Settings.");
+                break;
+            }
+
+            Assert.That(found, Is.True, "World scene is not registered in Build Settings.");
         }
 
         [TestCase("Assets/_SeedAndRock/Materials/SR_Terrain.mat", "SeedAndRock/Stylized Terrain")]

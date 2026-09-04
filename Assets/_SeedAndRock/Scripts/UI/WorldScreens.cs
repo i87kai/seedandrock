@@ -286,7 +286,9 @@ namespace SeedAndRock.UI
             UiKit.Size(buttons.GetComponent<HorizontalLayoutGroup>(), null, SeedAndRockTheme.SmallButtonHeight);
             cancelButton = UiKit.CreateButton(buttons, "CancelButton", "CANCEL", UiKit.ButtonStyle.Ghost, flow.CancelLoading, SeedAndRockTheme.SmallButtonHeight, SeedAndRockTheme.SmallSize);
             UiKit.Size(cancelButton, 200f, SeedAndRockTheme.SmallButtonHeight);
-            backButton = UiKit.CreateButton(buttons, "BackButton", "BACK TO WORLDS", UiKit.ButtonStyle.Primary, flow.ShowWorldBrowser, SeedAndRockTheme.SmallButtonHeight, SeedAndRockTheme.SmallSize);
+            // Leaving a load must cancel both the scene-preparation coroutine and any worker task;
+            // routing through CancelLoading keeps the persistent browser from racing a stale build.
+            backButton = UiKit.CreateButton(buttons, "BackButton", "BACK TO WORLDS", UiKit.ButtonStyle.Primary, flow.CancelLoading, SeedAndRockTheme.SmallButtonHeight, SeedAndRockTheme.SmallSize);
             UiKit.Size(backButton, 240f, SeedAndRockTheme.SmallButtonHeight);
         }
 
@@ -303,7 +305,7 @@ namespace SeedAndRock.UI
 
         public void Report(World.WorldGenerationReport report)
         {
-            stageLabel.text = report.Label + (report.Fraction.HasValue ? "  <size=70%><color=#7FB5AE>" + Mathf.RoundToInt(report.Fraction.Value * 100f) + "%</color></size>" : "…");
+            stageLabel.text = report.Label + (report.Fraction.HasValue ? "  <size=70%><color=#7FB5AE>" + Mathf.RoundToInt(report.Fraction.Value * 100f) + "%</color></size>" : "...");
             bar.SetProgress(report.Fraction);
             for (int i = 0; i < stageRows.Length; i++)
             {
