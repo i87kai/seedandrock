@@ -1,55 +1,102 @@
 using System.Collections;
-using SeedAndRock.Items;
+using System.Collections.Generic;
 using MapMagic.Terrains;
 using UnityEngine;
 namespace SeedAndRock.World
 {
-    /// <summary>Converts installed MapMagic detail outputs into gameplay entities using Unity's native instance positions.
-    /// Contains no scatter, noise, density, terrain, or biome generation algorithm.</summary>
+    /// <summary>
+    /// Converts the installed MapMagic detail outputs of one tile into gameplay data using Unity's native detail
+    /// instance positions. Contains no scatter, noise, density, terrain or biome generation algorithm.
+    ///
+    /// Trees and stones become native terrain TreeInstances (instanced, distance culled, no GameObjects).
+    /// Every placement is kept as a lightweight <see cref="Candidate"/>; <see cref="MapMagicResourceStreamer"/>
+    /// turns only the candidates near the player into harvestable objects, plants and animals.
+    /// </summary>
     public sealed class MapMagicGameplayTile : MonoBehaviour
     {
-        public bool Ready {get;private set;}
-        GameObject content;
-        public void Begin(TerrainTile tile)
+        public struct Candidate
         {
-            StopAllCoroutines();if(content!=null){content.SetActive(false);Destroy(content);}Ready=false;
-            content=new GameObject("MapMagic gameplay instances");content.transform.SetParent(tile.main.terrain.transform,false);
-            StartCoroutine(Apply(tile));
+            public SurvivalGraph.Placement kind;
+            public Vector3 position;
+            public float rotationDegrees, scale, random;
+            public string id;
+            /// <summary>Index into terrainData.treeInstances for trees/stones, -1 otherwise.</summary>
+            public int treeIndex;
         }
-        IEnumerator Apply(TerrainTile tile)
+
+        public bool Ready {get;private set;}
+        public Terrain Terrain {get;private set;}
+        public readonly List<Candidate> Candidates=new List<Candidate>();
+        public int TreeInstanceCount {get;private set;}
+
+        public void Begin(TerrainTile tile,MapMagicPrototypes prototypes)
+        {
+            StopAllCoroutines();Ready=false;Candidates.Clear();TreeInstanceCount=0;
+            Terrain=tile.main.terrain;
+            StartCoroutine(Apply(tile,prototypes));
+        }
+
+        IEnumerator Apply(TerrainTile tile,MapMagicPrototypes prototypes)
         {
             Terrain t=tile.main.terrain;TerrainData data=t.terrainData;
-            var world=WorldGenerator.Active;var palette=world.Settings.ToPalette();var materials=world.Materials;
-            int generated=0;
+            var depleted=ExpeditionWorld.Active!=null?ExpeditionWorld.Active.Depleted:null;
+            var trees=new List<TreeInstance>(512);
+            Vector3 size=data.size;Vector3 origin=t.transform.position;
+            int processed=0;
             for(int layer=0;layer<data.detailPrototypes.Length;layer++){
-                int kind=data.detailPrototypes[layer].noiseSeed-100;if(kind<0||kind>5)continue;
+                int kind=data.detailPrototypes[layer].noiseSeed-100;
+                if(kind<0||kind>=(int)SurvivalGraph.Placement.Count)continue;
+                var placement=(SurvivalGraph.Placement)kind;
                 for(int z=0;z<data.detailPatchCount;z++)for(int x=0;x<data.detailPatchCount;x++){
                     var instances=data.ComputeDetailInstanceTransforms(x,z,layer,1,out _);
                     for(int i=0;i<instances.Length;i++){
-                        var d=instances[i];Vector3 p=t.transform.position+new Vector3(d.posX,d.posY,d.posZ);
-                        p.y=t.SampleHeight(p)+t.transform.position.y;
-                        string id="mm1:"+tile.coord.x+":"+tile.coord.z+":"+kind+":"+x+":"+z+":"+i;
-                        if(ExpeditionWorld.Active!=null&&ExpeditionWorld.Active.Depleted.Contains(id))continue;
-                        if(kind<2){var prop=new PlacementInstance{kind=kind==0?PlacementKind.Tree:PlacementKind.Rock,x=p.x,y=p.y,z=p.z,scale=kind==0?2.5f+(d.rotationY%1)*1.2f:.9f+(d.rotationY%1),rotationDegrees=d.rotationY*Mathf.Rad2Deg,variant=i%3==0?0:1,variation=d.rotationY/7,biome=SeedAndRockBiome.Forest};ResourceNode.CreateProp(content.transform,prop,palette,materials,id);}
-                        else if(kind==5)Wildlife.Create(content.transform,p,i%3,id);
-                        else CreatePlant(content.transform,p,kind==2?"cloth":kind==3?"berries":"mushroom",id);
-                        if(++generated%24==0)yield return null;
+                        var d=instances[i];
+                        Vector3 p=origin+new Vector3(d.posX,0,d.posZ);
+                        p.y=t.SampleHeight(p)+origin.y;
+                        if(p.y<SurvivalGraph.SeaLevel+.6f)continue; // never in water, whatever the mask says
+                        string id="mm2:"+tile.coord.x+":"+tile.coord.z+":"+kind+":"+x+":"+z+":"+i;
+                        if(depleted!=null&&depleted.Contains(id))continue;
+                        float u=Frac(d.rotationY*.1591549f+i*.137f); // deterministic 0..1 from the native transform
+                        var c=new Candidate{kind=placement,position=p,rotationDegrees=d.rotationY*Mathf.Rad2Deg,random=u,treeIndex=-1};
+                        if(placement==SurvivalGraph.Placement.ForestTree||placement==SurvivalGraph.Placement.ScatterTree||placement==SurvivalGraph.Placement.Stone){
+                            bool stone=placement==SurvivalGraph.Placement.Stone;
+                            bool lone=placement==SurvivalGraph.Placement.ScatterTree;
+                            c.scale=stone?.8f+u*1.1f:lone?2.2f+u*1.3f:2.4f+Frac(u*3.7f)*1.4f;
+                            int proto=stone?prototypes.PickRock(u):prototypes.PickTree(Frac(u*7.3f),lone);
+                            c.treeIndex=trees.Count;
+                            trees.Add(new TreeInstance{
+                                position=new Vector3((p.x-origin.x)/size.x,(p.y-origin.y)/size.y,(p.z-origin.z)/size.z),
+                                widthScale=c.scale,heightScale=c.scale,rotation=d.rotationY,color=Color.white,lightmapColor=Color.white,prototypeIndex=proto});
+                        }
+                        else c.scale=1;
+                        c.id=id;Candidates.Add(c);
+                        if(++processed%400==0)yield return null;
                     }
                 }
-                // The native output is a placement source; avoid rendering proxy meshes a second time.
+                // The native output is a placement source only; the proxy meshes must never render.
                 data.SetDetailLayer(0,0,layer,new int[data.detailHeight,data.detailWidth]);
             }
+            data.treePrototypes=prototypes.TreePrototypes;
+            if(data.treePrototypes.Length!=prototypes.TreePrototypes.Length)Debug.LogWarning("[SeedAndRock] Terrain rejected "+(prototypes.TreePrototypes.Length-data.treePrototypes.Length)+" tree prototypes; trees on tile "+tile.coord+" may be missing.");
+            data.SetTreeInstances(trees.ToArray(),false);
+            TreeInstanceCount=trees.Count;
             Ready=true;
         }
-        public static void CreatePlant(Transform parent,Vector3 p,string item,string id)
+
+        /// <summary>Removes one native tree instance (harvested tree / mined stone) and fixes up candidate indices.</summary>
+        public void RemoveTreeInstance(int treeIndex)
         {
-            var root=new GameObject(item=="cloth"?"Wild cotton":item=="berries"?"Berry bush":"Edible mushrooms");root.transform.SetParent(parent,false);root.transform.position=p;
-            var n=root.AddComponent<ResourceNode>();n.StableId=id;n.ItemId=item;n.HandGather=true;n.Remaining=item=="cloth"?15:4;
-            var stem=PlaceholderModels.Part(root.transform,PrimitiveType.Cylinder,new Vector3(0,.25f,0),new Vector3(.07f,.25f,.07f),new Color(.23f,.35f,.1f));
-            for(int i=0;i<3;i++)PlaceholderModels.Part(root.transform,PrimitiveType.Sphere,new Vector3((i-1)*.2f,.45f+(i%2)*.1f,0),item=="mushroom"?new Vector3(.32f,.14f,.28f):Vector3.one*.27f,ItemCatalog.Get(item).tint);
-            var c=root.AddComponent<BoxCollider>();c.center=new Vector3(0,.4f,0);c.size=new Vector3(.8f,.8f,.6f);
+            if(Terrain==null||Terrain.terrainData==null||treeIndex<0)return;
+            var data=Terrain.terrainData;var all=data.treeInstances;
+            if(treeIndex>=all.Length)return;
+            var next=new TreeInstance[all.Length-1];
+            for(int i=0,j=0;i<all.Length;i++)if(i!=treeIndex)next[j++]=all[i];
+            data.SetTreeInstances(next,false);TreeInstanceCount=next.Length;
+            for(int i=0;i<Candidates.Count;i++){var c=Candidates[i];if(c.treeIndex==treeIndex)c.treeIndex=-1;else if(c.treeIndex>treeIndex)c.treeIndex--;Candidates[i]=c;}
         }
-        public void Clear(){StopAllCoroutines();Ready=false;if(content!=null){content.SetActive(false);Destroy(content);}}
+
+        static float Frac(float v)=>v-Mathf.Floor(v);
+        public void Clear(){StopAllCoroutines();Ready=false;Candidates.Clear();}
         void OnDestroy(){Clear();}
     }
 }

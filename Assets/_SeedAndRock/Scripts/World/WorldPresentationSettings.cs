@@ -28,6 +28,6 @@ namespace SeedAndRock.World
         [Header("Camera")]
         public AntialiasingMode antialiasing = AntialiasingMode.SubpixelMorphologicalAntiAliasing;
         public AntialiasingQuality antialiasingQuality = AntialiasingQuality.High;
-        [Range(100f, 5000f)] public float farClipPlane = 2400f;
+        [Range(100f, 5000f)] public float farClipPlane = 1500f;
     }
 }
