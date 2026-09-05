@@ -231,6 +231,7 @@ namespace SeedAndRock.World
             // ---- Stage: placing vegetation --------------------------------------------------------------
             Report(progress, WorldGenerationStage.PlacingVegetation, null);
             float placementProgress = 0f;
+            PlacementResult harvestPlacement = null;
             Task<PropMeshSet> propsTask = Task.Run(() =>
             {
                 PlacementResult placement = VegetationPlacer.Place(sampler, value => Volatile.Write(ref placementProgress, value * 0.8f));
@@ -238,7 +239,10 @@ namespace SeedAndRock.World
                 result.TreeCount = placement.Trees.Count;
                 result.RockCount = placement.Rocks.Count;
                 result.GrassCount = placement.Grass.Count;
-                PropMeshSet set = PropMeshBuilder.Build(placement, palette, chunks, token);
+                harvestPlacement = placement;
+                var grassOnly = new PlacementResult();
+                grassOnly.Grass.AddRange(placement.Grass);
+                PropMeshSet set = PropMeshBuilder.Build(grassOnly, palette, chunks, token);
                 Volatile.Write(ref placementProgress, 1f);
                 return set;
             }, token);
@@ -281,6 +285,18 @@ namespace SeedAndRock.World
                 }
             }
 
+            int nodeIndex = 0;
+            foreach (var p in harvestPlacement.Trees)
+            {
+                SeedAndRock.Items.ResourceNode.CreateProp(propRoot, p, palette, materials, "tree-" + nodeIndex++);
+                if (frame.Elapsed.TotalMilliseconds > FrameBudgetMilliseconds) { yield return null; frame.Restart(); }
+            }
+            nodeIndex = 0;
+            foreach (var p in harvestPlacement.Rocks)
+            {
+                SeedAndRock.Items.ResourceNode.CreateProp(propRoot, p, palette, materials, "stone-" + nodeIndex++);
+                if (frame.Elapsed.TotalMilliseconds > FrameBudgetMilliseconds) { yield return null; frame.Restart(); }
+            }
             // ---- Stage: preparing player ----------------------------------------------------------------
             Report(progress, WorldGenerationStage.PreparingPlayer, null);
             try

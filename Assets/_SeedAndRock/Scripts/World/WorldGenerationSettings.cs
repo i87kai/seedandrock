@@ -68,6 +68,14 @@ namespace SeedAndRock.World
         [Range(0f, 1f)] public float forestMoistureThreshold = 0.58f;
         [Range(0f, 1f)] public float highlandHeightThreshold = 0.62f;
 
+        [Header("Climate")]
+        public float minAmbientCelsius = -15f;
+        public float snowLineCelsius = 0f;
+        public float temperateCelsius = 16f;
+        public float hotFringeCelsius = 32f;
+        public float maxAmbientCelsius = 46f;
+        public float waterCoolingCelsius = 4f;
+
         [Header("Hydrology")]
         [Range(32, 512)] public int hydrologyResolution = 192;
         [Range(8f, 2000f)] public float riverCatchmentCells = 180f;
@@ -129,6 +137,13 @@ namespace SeedAndRock.World
                 case SeedAndRockBiome.Mountains: return highlands;
                 default: return grassland;
             }
+        }
+
+        public float ToAmbientCelsius(float temperature01, bool inWater)
+        {
+            float celsius = WorldClimate.Temperature01ToCelsius(temperature01,
+                minAmbientCelsius, snowLineCelsius, temperateCelsius, hotFringeCelsius, maxAmbientCelsius);
+            return inWater ? celsius - waterCoolingCelsius : celsius;
         }
 
         /// <summary>Creates the immutable, engine-free snapshot used by the generation core.</summary>

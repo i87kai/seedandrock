@@ -11,7 +11,10 @@ namespace SeedAndRock.Saves
     [Serializable]
     public sealed class SavedWorld
     {
-        public const int CurrentVersion = 2;
+        public const int CurrentVersion = 3;
+        public ExpeditionState expedition;
+        public string worldBackend;
+        public int graphVersion;
 
         public int version = CurrentVersion;
         public string id;
@@ -26,6 +29,11 @@ namespace SeedAndRock.Saves
         public float playerZ;
         public float playerYaw;
         public float playerPitch;
+        public bool hasSurvivalState;
+        public float health;
+        public float hunger;
+        public float thirst;
+        public float bodyTemperature;
 
         public PlayerStateData GetPlayerState() => new PlayerStateData(playerX, playerY, playerZ, playerYaw, playerPitch);
 
@@ -51,7 +59,7 @@ namespace SeedAndRock.Saves
             return value.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(value, DateTimeKind.Utc) : value.ToUniversalTime();
         }
 
-        public SavedWorld Clone() => (SavedWorld)MemberwiseClone();
+        public SavedWorld Clone() { var copy = (SavedWorld)MemberwiseClone(); copy.expedition = expedition?.Copy(); return copy; }
     }
 
     [Serializable]

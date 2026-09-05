@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="My project" tests="1" failures="0" errors="0" skipped="0" time="4.440">
+  <testsuite name="SeedAndRock.Tests.GameFlowPlayModeTests" tests="1" failures="0" errors="0" skipped="0" time="4.440">
+    <testcase name="CreateGeneratePauseSaveAndReturnToMenu" classname="SeedAndRock.Tests.GameFlowPlayModeTests" time="4.440">
+      <system-out>Saving results to: C:/Users/Arsha/AppData/LocalLow/DefaultCompany/My project\TestResults.xml</system-out>
+    </testcase>
+  </testsuite>
+</testsuites>

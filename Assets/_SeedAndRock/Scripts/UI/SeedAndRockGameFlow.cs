@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using SeedAndRock.Player;
 using SeedAndRock.Saves;
+using SeedAndRock.Survival;
 using SeedAndRock.World;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -47,6 +48,7 @@ namespace SeedAndRock.UI
         private SettingsScreen settings;
         private ConfirmDialog confirm;
         private HudOverlay hud;
+        private SurvivalStatusHud survivalHud;
         private DeveloperOverlay developerOverlay;
         private ScreenFader fader;
 
@@ -100,6 +102,8 @@ namespace SeedAndRock.UI
 
         private void HandleEscape()
         {
+            var expedition = PlayerSpawner.Find()?.GetComponent<PlayerExpedition>();
+            if(expedition != null && expedition.InventoryOpen) { expedition.SetInventory(false); return; }
             if (confirm != null && confirm.IsVisible) { confirm.Hide(); return; }
             switch (state)
             {
@@ -213,6 +217,8 @@ namespace SeedAndRock.UI
             }
 
             SavedWorld world = saves.CreateRecord(nameText, seed, difficulty);
+            world.worldBackend = "mapmagic2";
+            world.graphVersion = 1;
             if (!saves.TrySave(world, out string error))
             {
                 creation.ShowError("Could not save the new world: " + error);
@@ -227,6 +233,12 @@ namespace SeedAndRock.UI
         public void EnterWorld(SavedWorld world)
         {
             if (world == null || state == GameFlowState.Loading) return;
+            if(world.hasVisited && (world.worldBackend != "mapmagic2" || world.graphVersion != 1))
+            {
+                browser.SetHint("This save uses a different terrain backend/version. Create a new MapMagic world; your original save is preserved.");
+                return;
+            }
+            world.worldBackend="mapmagic2";world.graphVersion=1;
             if (worldEntryRoutine != null) StopCoroutine(worldEntryRoutine);
             HideAll();
             currentWorld = world;
@@ -310,7 +322,17 @@ namespace SeedAndRock.UI
             if (player != null)
             {
                 RestorePlayer(player, result);
+                if (currentWorld.hasSurvivalState)
+                {
+                    PlayerSurvival survival = player.GetComponent<PlayerSurvival>();
+                    survival?.ApplySnapshot(currentWorld.health, currentWorld.hunger, currentWorld.thirst, currentWorld.bodyTemperature);
+                }
                 presentation?.ApplyToCamera(player.ViewCamera);
+                player.GetComponent<PlayerExpedition>()?.Restore(currentWorld.expedition);
+                ExpeditionWorld.Active?.Restore(currentWorld.expedition);
+                var vitals = player.GetComponent<PlayerSurvival>();
+                vitals?.SetDifficulty(currentWorld.difficulty);
+                if(!currentWorld.hasSurvivalState && vitals != null) vitals.ApplySnapshot(vitals.MaxHealth,vitals.MaxHunger,vitals.MaxThirst,37);
             }
 
             GameSettings.Apply();
@@ -329,12 +351,11 @@ namespace SeedAndRock.UI
             {
                 PlayerStateData saved = currentWorld.GetPlayerState();
                 Vector3 savedPosition = new Vector3(saved.x, saved.y, saved.z);
-                float half = result.Sampler.Settings.HalfSize;
-                bool inside = saved.IsFinite && Mathf.Abs(saved.x) < half && Mathf.Abs(saved.z) < half;
+                bool inside = saved.IsFinite && generator.TryGetHeightAt(saved.x,saved.z,out _);
                 if (inside)
                 {
                     // Saved positions come from the same seed, but settings may have changed since; snap to the current surface when far off.
-                    float ground = result.Sampler.GetHeightAt(saved.x, saved.z);
+                    float ground = generator.GetHeightAt(saved.x, saved.z);
                     if (Mathf.Abs(saved.y - ground) > 6f) savedPosition.y = ground + 0.2f;
                     target = savedPosition;
                     yaw = saved.yaw;
@@ -350,13 +371,21 @@ namespace SeedAndRock.UI
             fader.SetOpaque();
             loading.Hide(true);
             yield return null;
+            var expedition = PlayerSpawner.Find()?.GetComponent<PlayerExpedition>();
+            if(!currentWorld.hasVisited && expedition != null)
+            {
+                fader.FadeIn(.5f, () => { });
+                yield return expedition.WakeUp();
+            }
             state = GameFlowState.Playing;
             SetPlayerControl(true);
             hud.SetVisible(true);
+            survivalHud?.SetVisible(true);
             hud.Toast(currentWorld.worldName + "  •  seed " + currentWorld.seed, 3.5f);
             bool done = false;
             fader.FadeIn(0.9f, () => done = true);
             while (!done) yield return null;
+            SaveCurrentWorld();
         }
 
         private void OnWorldGenerationFailed(Exception exception)
@@ -455,6 +484,11 @@ namespace SeedAndRock.UI
         {
             FirstPersonExplorerController controller = PlayerSpawner.Find();
             if (controller != null) controller.enabled = enabled;
+            if (controller != null)
+            {
+                var interaction = controller.GetComponent<SeedAndRock.Interaction.SeedAndRockInteractionRaycaster>();
+                if(interaction!=null)interaction.enabled=enabled;
+            }
             Cursor.lockState = enabled ? CursorLockMode.Locked : CursorLockMode.None;
             Cursor.visible = !enabled;
         }
@@ -468,6 +502,7 @@ namespace SeedAndRock.UI
             settings.Hide();
             confirm.Hide(true);
             if (!keepPause) pause.Hide();
+            survivalHud?.SetVisible(false);
         }
 
         // ------------------------------------------------------------------ canvas
@@ -496,6 +531,8 @@ namespace SeedAndRock.UI
 
             Transform parent = root.transform;
             hud = new HudOverlay(parent);
+            root.AddComponent<InventoryHud>();
+            survivalHud = SurvivalStatusHud.Create(parent);
             mainMenu = new MainMenuScreen(this, parent);
             browser = new WorldBrowserScreen(this, parent);
             creation = new CreateWorldScreen(this, parent);

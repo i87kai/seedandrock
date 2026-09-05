@@ -36,6 +36,7 @@ namespace SeedAndRock.Player
         public float Pitch => pitch;
         public bool IsGrounded => controller != null && controller.isGrounded;
         public Camera ViewCamera => viewCamera;
+        public bool IsSwimming { get; private set; }
 
         private void Awake()
         {
@@ -126,12 +127,27 @@ namespace SeedAndRock.Player
 
         private void UpdateMovement()
         {
+            var backendWorld = SeedAndRock.World.WorldGenerator.Active;
+            if (backendWorld != null && !backendWorld.TryGetHeightAt(transform.position.x,transform.position.z,out _)) return;
             Vector2 input = moveAction.ReadValue<Vector2>();
             Vector3 planar = transform.right * input.x + transform.forward * input.y;
             if (planar.sqrMagnitude > 1f)
                 planar.Normalize();
 
             float speed = sprintAction.IsPressed() ? sprintSpeed : walkSpeed;
+            var world = SeedAndRock.World.WorldGenerator.Active;
+            float surface = 0f;
+            IsSwimming = world != null && world.TryGetWaterSurfaceAt(transform.position.x,transform.position.z,out surface)
+                && transform.position.y < surface - .8f;
+            if (IsSwimming)
+            {
+                float ascend = jumpAction.IsPressed() ? 1f : Keyboard.current?.leftCtrlKey.isPressed == true ? -1f : 0f;
+                float buoyancy = Mathf.Clamp((surface - 1.2f - transform.position.y)*2,-1.5f,1.5f);
+                verticalVelocity = ascend != 0 ? ascend*3 : buoyancy;
+                if (viewCamera != null && input.y != 0) verticalVelocity += viewCamera.transform.forward.y * input.y * 2;
+                controller.Move((planar*3.2f+Vector3.up*verticalVelocity)*Time.deltaTime);
+                return;
+            }
             if (controller.isGrounded)
             {
                 if (verticalVelocity < 0f)
@@ -142,7 +158,8 @@ namespace SeedAndRock.Player
 
             verticalVelocity += gravity * Time.deltaTime;
             Vector3 motion = planar * speed + Vector3.up * verticalVelocity;
-            controller.Move(motion * Time.deltaTime);
+            Vector3 next = transform.position + motion * Time.deltaTime;
+            if(world==null || world.TryGetHeightAt(next.x,next.z,out _)) controller.Move(motion * Time.deltaTime);
         }
     }
 }

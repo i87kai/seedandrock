@@ -1,4 +1,5 @@
 using SeedAndRock.Interaction;
+using SeedAndRock.Survival;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
 
@@ -20,7 +21,7 @@ namespace SeedAndRock.Player
             FirstPersonExplorerController controller = Find();
             if (controller == null)
             {
-                GameObject player = new GameObject(PlayerName, typeof(CharacterController), typeof(FirstPersonExplorerController), typeof(SeedAndRockInteractionRaycaster));
+                GameObject player = new GameObject(PlayerName, typeof(CharacterController), typeof(FirstPersonExplorerController), typeof(SeedAndRockInteractionRaycaster), typeof(PlayerSurvival));
                 controller = player.GetComponent<FirstPersonExplorerController>();
                 GameObject cameraObject = new GameObject("Main Camera", typeof(Camera), typeof(AudioListener));
                 cameraObject.tag = "MainCamera";
@@ -30,11 +31,17 @@ namespace SeedAndRock.Player
                 camera.farClipPlane = 2500f;
                 UniversalAdditionalCameraData cameraData = camera.GetUniversalAdditionalCameraData();
                 cameraData.renderPostProcessing = true;
+                cameraData.requiresDepthTexture = true;
+                cameraData.requiresColorTexture = true;
                 cameraData.antialiasing = AntialiasingMode.SubpixelMorphologicalAntiAliasing;
                 cameraData.antialiasingQuality = AntialiasingQuality.High;
             }
 
+            if (controller.GetComponent<PlayerSurvival>() == null)
+                controller.gameObject.AddComponent<PlayerSurvival>();
+
             Teleport(controller, spawnPosition, 0f, 0f);
+            if (controller.GetComponent<PlayerExpedition>() == null) controller.gameObject.AddComponent<PlayerExpedition>();
             return controller;
         }
 

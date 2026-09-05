@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using SeedAndRock.Player;
+using SeedAndRock.Survival;
 using UnityEngine;
 
 namespace SeedAndRock.Saves
@@ -82,7 +83,18 @@ namespace SeedAndRock.Saves
                 world.SetPlayerState(new PlayerStateData(position.x, position.y, position.z, controller.Yaw, controller.Pitch));
             }
 
+            PlayerSurvival survival = controller != null ? controller.GetComponent<PlayerSurvival>() : null;
+            if (survival != null)
+            {
+                world.hasSurvivalState = true;
+                world.health = survival.Health;
+                world.hunger = survival.Hunger;
+                world.thirst = survival.Thirst;
+                world.bodyTemperature = survival.BodyTemperatureCelsius;
+            }
+
             world.lastPlayedUtc = SavedWorld.FormatUtc(DateTime.UtcNow);
+            if(controller!=null)world.expedition=controller.GetComponent<PlayerExpedition>()?.Capture();
         }
     }
 }

@@ -84,7 +84,7 @@ namespace SeedAndRock.World
 
         // ------------------------------------------------------------------ trees
 
-        private static void AppendTree(MeshData trunks, MeshData foliage, in PlacementInstance p, WorldGenerationPalette palette)
+        public static void AppendTree(MeshData trunks, MeshData foliage, in PlacementInstance p, WorldGenerationPalette palette)
         {
             Vector3 origin = new Vector3(p.x, p.y, p.z);
             YawRotation yaw = new YawRotation(p.rotationDegrees);
@@ -239,7 +239,7 @@ namespace SeedAndRock.World
 
         // ------------------------------------------------------------------ rocks
 
-        private static void AppendRock(MeshData data, in PlacementInstance p)
+        public static void AppendRock(MeshData data, in PlacementInstance p)
         {
             Vector3 origin = new Vector3(p.x, p.y, p.z);
             YawRotation rotation = new YawRotation(p.rotationDegrees);

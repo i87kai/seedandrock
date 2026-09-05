@@ -60,6 +60,7 @@ namespace SeedAndRock.World
                 {
                     float px = SRMath.Lerp(-half, half, (x + SeedNoise.Hash01(seed + 2003, x, z)) / cells);
                     float pz = SRMath.Lerp(-half, half, (z + SeedNoise.Hash01(seed + 2017, x, z)) / cells);
+                    if (SRMath.Length(px,pz) < 14f) continue;
                     SurfaceSample s = sampler.SampleSurface(px, pz);
                     if (s.isWater || s.waterDistance < 1.2f) continue;
                     float lip = sampler.GetWaterSurfaceCandidate(px, pz);
