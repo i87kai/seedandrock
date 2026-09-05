@@ -15,18 +15,18 @@ RenderSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 10
   m_Fog: 1
-  m_FogColor: {r: 0.68, g: 0.78, b: 0.86, a: 1}
+  m_FogColor: {r: 0.83291286, g: 0.83354354, b: 0.857922, a: 1}
   m_FogMode: 3
-  m_FogDensity: 0.0028
+  m_FogDensity: 0.0032
   m_LinearFogStart: 0
   m_LinearFogEnd: 300
-  m_AmbientSkyColor: {r: 0.52, g: 0.66, b: 0.82, a: 1}
-  m_AmbientEquatorColor: {r: 0.5, g: 0.55, b: 0.46, a: 1}
-  m_AmbientGroundColor: {r: 0.2, g: 0.22, b: 0.17, a: 1}
+  m_AmbientSkyColor: {r: 0.905, g: 0.93, b: 0.97, a: 1}
+  m_AmbientEquatorColor: {r: 0.7397477, g: 0.7321261, b: 0.7227532, a: 1}
+  m_AmbientGroundColor: {r: 0.31252503, g: 0.27897525, b: 0.26852533, a: 0.865}
   m_AmbientIntensity: 1
   m_AmbientMode: 1
   m_SubtractiveShadowColor: {r: 0.42, g: 0.478, b: 0.627, a: 1}
-  m_SkyboxMaterial: {fileID: 10304, guid: 0000000000000000f000000000000000, type: 0}
+  m_SkyboxMaterial: {fileID: 2100000, guid: eb04940eb1ca546dba331982286a42d7, type: 2}
   m_HaloStrength: 0.5
   m_FlareStrength: 1
   m_FlareFadeSpeed: 3
@@ -119,6 +119,359 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1 &313368228
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 313368229}
+  - component: {fileID: 313368230}
+  m_Layer: 0
+  m_Name: Cozy Underwater Volume
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &313368229
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 313368228}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 361643564}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &313368230
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 313368228}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 172515602e62fb746b5d573b38a5fe58, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.RenderPipelines.Core.Runtime::UnityEngine.Rendering.Volume
+  m_IsGlobal: 1
+  priority: 10
+  blendDistance: 0
+  weight: 0
+  sharedProfile: {fileID: 11400000, guid: 3b7eb8a4a97b327f6eeedcf070fd7f53, type: 2}
+--- !u!1 &361643561
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 361643564}
+  - component: {fileID: 361643563}
+  - component: {fileID: 361643562}
+  m_Layer: 0
+  m_Name: Cozy Rendering
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &361643562
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 361643561}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ac4aeeaa4bfa26848050a505e440dda8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Cozy.Rendering.CozyWind
+  directionDegrees: 35
+  directionWander: 12
+  wanderSpeed: 0.05
+  strength: 0.35
+  speed: 1
+  gustiness: 0.55
+  turbulenceScale: 18
+  leafFlutter: 1
+--- !u!114 &361643563
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 361643561}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 734356b3f5866d1e7aa86832b895f698, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Cozy.Rendering.CozyAtmosphere
+  timeOfDay: 15.5
+  dayLengthMinutes: 0
+  animateInEditMode: 0
+  sun: {fileID: 909693047}
+  driveSunLight: 1
+  sunAzimuth: 35
+  sunMaxElevation: 62
+  sunColor:
+    serializedVersion: 2
+    key0: {r: 0.55, g: 0.66, b: 0.95, a: 1}
+    key1: {r: 1, g: 0.55, b: 0.32, a: 1}
+    key2: {r: 1, g: 0.8, b: 0.58, a: 0}
+    key3: {r: 1, g: 0.96, b: 0.88, a: 0}
+    key4: {r: 1, g: 0.86, b: 0.62, a: 0}
+    key5: {r: 1, g: 0.52, b: 0.28, a: 0}
+    key6: {r: 0.6, g: 0.45, b: 0.7, a: 0}
+    key7: {r: 0.55, g: 0.66, b: 0.95, a: 0}
+    ctime0: 0
+    ctime1: 14418
+    ctime2: 18350
+    ctime3: 32768
+    ctime4: 45875
+    ctime5: 50462
+    ctime6: 53739
+    ctime7: 65535
+    atime0: 0
+    atime1: 65535
+    atime2: 0
+    atime3: 0
+    atime4: 0
+    atime5: 0
+    atime6: 0
+    atime7: 0
+    m_Mode: 0
+    m_ColorSpace: -1
+    m_NumColorKeys: 8
+    m_NumAlphaKeys: 2
+  sunIntensity:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 0.21
+      value: 0
+      inSlope: 9.166664
+      outSlope: 9.166664
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 0.27
+      value: 1.1
+      inSlope: 10.144925
+      outSlope: 10.144925
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 0.5
+      value: 1.55
+      inSlope: 0.29644275
+      outSlope: 0.29644275
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 0.72
+      value: 1.25
+      inSlope: -9.610391
+      outSlope: -9.610391
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 0.79
+      value: 0
+      inSlope: -8.928573
+      outSlope: -8.928573
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  moonColor: {r: 0.55, g: 0.66, b: 0.95, a: 1}
+  moonIntensity: 0.16
+  zenithColor:
+    serializedVersion: 2
+    key0: {r: 0.02, g: 0.04, b: 0.1, a: 1}
+    key1: {r: 0.05, g: 0.08, b: 0.2, a: 1}
+    key2: {r: 0.28, g: 0.44, b: 0.8, a: 0}
+    key3: {r: 0.22, g: 0.5, b: 0.92, a: 0}
+    key4: {r: 0.26, g: 0.42, b: 0.82, a: 0}
+    key5: {r: 0.14, g: 0.12, b: 0.36, a: 0}
+    key6: {r: 0.02, g: 0.04, b: 0.1, a: 0}
+    key7: {r: 0, g: 0, b: 0, a: 0}
+    ctime0: 0
+    ctime1: 13107
+    ctime2: 17694
+    ctime3: 32768
+    ctime4: 47841
+    ctime5: 52428
+    ctime6: 65535
+    ctime7: 0
+    atime0: 0
+    atime1: 65535
+    atime2: 0
+    atime3: 0
+    atime4: 0
+    atime5: 0
+    atime6: 0
+    atime7: 0
+    m_Mode: 0
+    m_ColorSpace: -1
+    m_NumColorKeys: 7
+    m_NumAlphaKeys: 2
+  horizonColor:
+    serializedVersion: 2
+    key0: {r: 1, g: 1, b: 1, a: 1}
+    key1: {r: 1, g: 1, b: 1, a: 1}
+    key2: {r: 0, g: 0, b: 0, a: 0}
+    key3: {r: 0, g: 0, b: 0, a: 0}
+    key4: {r: 0, g: 0, b: 0, a: 0}
+    key5: {r: 0, g: 0, b: 0, a: 0}
+    key6: {r: 0, g: 0, b: 0, a: 0}
+    key7: {r: 0, g: 0, b: 0, a: 0}
+    ctime0: 0
+    ctime1: 65535
+    ctime2: 0
+    ctime3: 0
+    ctime4: 0
+    ctime5: 0
+    ctime6: 0
+    ctime7: 0
+    atime0: 0
+    atime1: 65535
+    atime2: 0
+    atime3: 0
+    atime4: 0
+    atime5: 0
+    atime6: 0
+    atime7: 0
+    m_Mode: 0
+    m_ColorSpace: -1
+    m_NumColorKeys: 2
+    m_NumAlphaKeys: 2
+  groundColor:
+    serializedVersion: 2
+    key0: {r: 0.04, g: 0.05, b: 0.08, a: 1}
+    key1: {r: 0.4, g: 0.34, b: 0.36, a: 1}
+    key2: {r: 0.48, g: 0.56, b: 0.62, a: 0}
+    key3: {r: 0.46, g: 0.34, b: 0.36, a: 0}
+    key4: {r: 0.04, g: 0.05, b: 0.08, a: 0}
+    key5: {r: 0, g: 0, b: 0, a: 0}
+    key6: {r: 0, g: 0, b: 0, a: 0}
+    key7: {r: 0, g: 0, b: 0, a: 0}
+    ctime0: 0
+    ctime1: 16384
+    ctime2: 32768
+    ctime3: 49151
+    ctime4: 65535
+    ctime5: 0
+    ctime6: 0
+    ctime7: 0
+    atime0: 0
+    atime1: 65535
+    atime2: 0
+    atime3: 0
+    atime4: 0
+    atime5: 0
+    atime6: 0
+    atime7: 0
+    m_Mode: 0
+    m_ColorSpace: -1
+    m_NumColorKeys: 5
+    m_NumAlphaKeys: 2
+  skyboxMaterial: {fileID: 2100000, guid: eb04940eb1ca546dba331982286a42d7, type: 2}
+  driveAmbient: 1
+  ambientIntensity: 1
+  ambientSkyInfluence: 0.75
+  driveFog: 1
+  fogColor:
+    serializedVersion: 2
+    key0: {r: 0.07, g: 0.09, b: 0.16, a: 1}
+    key1: {r: 0.34, g: 0.26, b: 0.36, a: 1}
+    key2: {r: 0.92, g: 0.78, b: 0.66, a: 0}
+    key3: {r: 0.76, g: 0.87, b: 0.96, a: 0}
+    key4: {r: 0.86, g: 0.82, b: 0.82, a: 0}
+    key5: {r: 0.88, g: 0.58, b: 0.48, a: 0}
+    key6: {r: 0.26, g: 0.2, b: 0.34, a: 0}
+    key7: {r: 0.07, g: 0.09, b: 0.16, a: 0}
+    ctime0: 0
+    ctime1: 14418
+    ctime2: 18350
+    ctime3: 32768
+    ctime4: 45875
+    ctime5: 50462
+    ctime6: 55049
+    ctime7: 65535
+    atime0: 0
+    atime1: 65535
+    atime2: 0
+    atime3: 0
+    atime4: 0
+    atime5: 0
+    atime6: 0
+    atime7: 0
+    m_Mode: 0
+    m_ColorSpace: -1
+    m_NumColorKeys: 8
+    m_NumAlphaKeys: 2
+  fogDensity: 0.0032
+  heightFogDensity: 0.018
+  heightFogFalloff: 0.07
+  heightFogBase: 3.5
+  fogSunInscatter: 0.6
+--- !u!4 &361643564
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 361643561}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 313368229}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &378120366
 GameObject:
   m_ObjectHideFlags: 0
@@ -165,14 +518,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   settings: {fileID: 11400000, guid: 52740bc507349c3479f494e6b6a10614, type: 2}
-  terrainMaterial: {fileID: 2100000, guid: 48d7170485201d2418810aeee12a6e76, type: 2}
-  grassMaterial: {fileID: 2100000, guid: bd15122cbd352ae4bb9809d41ca71230, type: 2}
-  waterMaterial: {fileID: 2100000, guid: 5981c09a285621c4fb9f1c4a3aa3dd5a, type: 2}
-  trunkMaterial: {fileID: 2100000, guid: aacc38470b05d5343b667579c55cda71, type: 2}
-  foliageMaterial: {fileID: 2100000, guid: ee3bf82fec7067e4a9de23daef2f2923, type: 2}
-  rockMaterial: {fileID: 2100000, guid: 298aea364f91f3a4c81a3c0f37b31df9, type: 2}
-  createPlayerFoundation: 1
-  createInteractionProof: 1
+  terrainMaterial: {fileID: 2100000, guid: b413dab8e622d2140325edc7d1bfc5c4, type: 2}
+  grassMaterial: {fileID: 2100000, guid: 5674a8bf6015d2705a5ae9348340a93e, type: 2}
+  waterMaterial: {fileID: 2100000, guid: 6d3322357be296d3a1eb68ffd7e1d348, type: 2}
+  trunkMaterial: {fileID: 2100000, guid: 593c284ef8cba769b31d71792b0c9e0b, type: 2}
+  foliageMaterial: {fileID: 2100000, guid: cc31b78c1ef720904c88412ea8d0d882, type: 2}
+  rockMaterial: {fileID: 2100000, guid: 80e9580f9356abd322ced32663d8b5cc, type: 2}
 --- !u!114 &378120369
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -244,8 +595,8 @@ Light:
   m_Enabled: 1
   serializedVersion: 13
   m_Type: 1
-  m_Color: {r: 1, g: 0.93, b: 0.82, a: 1}
-  m_Intensity: 1.35
+  m_Color: {r: 1, g: 0.88708717, b: 0.6904266, a: 1}
+  m_Intensity: 1.6474079
   m_Range: 10
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.80208
@@ -289,7 +640,7 @@ Light:
   m_AreaSize: {x: 1, y: 1}
   m_BounceIntensity: 1
   m_ColorTemperature: 5000
-  m_UseColorTemperature: 1
+  m_UseColorTemperature: 0
   m_BoundingSphereOverride: {x: 0, y: 0, z: 0, w: 0}
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
@@ -307,7 +658,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 909693045}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.40821788, y: -0.23456968, z: 0.10938163, w: 0.8754261}
+  m_LocalRotation: {x: -0.036998082, y: 0.95159477, z: -0.27749008, w: -0.12687728}
   m_LocalPosition: {x: 0, y: 3, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -421,6 +772,7 @@ GameObject:
   - component: {fileID: 1589868147}
   - component: {fileID: 1589868146}
   - component: {fileID: 1589868145}
+  - component: {fileID: 1589868149}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -441,8 +793,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_RenderShadows: 1
-  m_RequiresDepthTextureOption: 2
-  m_RequiresOpaqueTextureOption: 2
+  m_RequiresDepthTextureOption: 1
+  m_RequiresOpaqueTextureOption: 1
   m_CameraType: 0
   m_Cameras: []
   m_RendererIndex: -1
@@ -546,6 +898,28 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1545106054}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1589868149
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1589868144}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a6fd7d778177cf5f00b2eb364bbd4635, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Cozy.Rendering.CozyCameraSetup
+  enablePostProcessing: 1
+  requestDepthAndOpaqueTextures: 1
+  underwaterEnabled: 1
+  waterSurface: {fileID: 0}
+  waterLevel: 0
+  surfaceOffset: 0.08
+  underwaterColor: {r: 0.08, g: 0.36, b: 0.5, a: 1}
+  absorption: 0.09
+  underwaterVolume: {fileID: 313368230}
+  blendSpeed: 10
 --- !u!1 &1811559709
 GameObject:
   m_ObjectHideFlags: 0
@@ -579,7 +953,7 @@ MonoBehaviour:
   priority: 0
   blendDistance: 0
   weight: 1
-  sharedProfile: {fileID: 11400000, guid: dcd1ccc383e4bf84787f7a17ca6565b7, type: 2}
+  sharedProfile: {fileID: 11400000, guid: fba6b4e4ead67d3b17feff3576afe5d5, type: 2}
 --- !u!4 &1811559711
 Transform:
   m_ObjectHideFlags: 0
@@ -603,3 +977,4 @@ SceneRoots:
   - {fileID: 1811559711}
   - {fileID: 378120367}
   - {fileID: 1545106054}
+  - {fileID: 361643564}

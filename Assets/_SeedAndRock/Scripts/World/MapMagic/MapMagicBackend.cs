@@ -58,6 +58,8 @@ namespace SeedAndRock.World
             Map.terrainSettings.shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.On;
             Map.tiles.generateLimited=false;Map.tiles.generateInfinite=true;Map.tiles.genAroundMainCam=false;Map.tiles.genAroundTfms=true;Map.tiles.genAroundTfmsList=new[]{player};
             Map.draftsInPlaymode=true;Map.draftResolution=MapMagicObject.Resolution._65;Map.applyColliders=true;
+            // The resource keeps streamed MapMagic tiles on the same Cozy terrain shader
+            // as the scene presentation material, including when tiles are created at runtime.
             Map.terrainSettings.material=Resources.Load<Material>("SR_MapMagicTerrain");
             root.SetActive(true);Map.tiles.Pin(new Coord(0,0),false,Map);Map.Refresh(true);
             while(!TryHeight(player.position.x,player.position.z,out _)){
