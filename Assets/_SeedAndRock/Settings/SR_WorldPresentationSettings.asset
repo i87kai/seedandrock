@@ -25,4 +25,4 @@ MonoBehaviour:
   fogDensity: 0.0028
   antialiasing: 2
   antialiasingQuality: 2
-  farClipPlane: 2400
+  farClipPlane: 1500
