@@ -28,7 +28,7 @@ namespace SeedAndRock.Player
                 cameraObject.transform.SetParent(player.transform, false);
                 Camera camera = cameraObject.GetComponent<Camera>();
                 camera.nearClipPlane = 0.08f;
-                camera.farClipPlane = 2500f;
+                camera.farClipPlane = 1500f;
                 UniversalAdditionalCameraData cameraData = camera.GetUniversalAdditionalCameraData();
                 cameraData.renderPostProcessing = true;
                 cameraData.requiresDepthTexture = true;

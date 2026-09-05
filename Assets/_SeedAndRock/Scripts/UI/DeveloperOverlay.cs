@@ -73,6 +73,18 @@ namespace SeedAndRock.UI
                     builder.Append("   lakes ").Append(sampler.Hydrology.Lakes.Count).Append("   river cells ").Append(sampler.Hydrology.RiverCellCount);
             }
 
+            if (Generator != null && Generator.Backend != null && Generator.Backend.Map != null)
+            {
+                var stats = Generator.Backend.Stats();
+                builder.Append("\nMapMagic tiles: ").Append(stats.mainTiles).Append(" main, ").Append(stats.draftTiles).Append(" draft   terrain trees/stones ").Append(stats.treeInstances.ToString("N0"));
+                builder.Append("   streamed objects ").Append(stats.streamed);
+                if (player != null && Generator.TryGetHeightAt(player.transform.position.x, player.transform.position.z, out _))
+                {
+                    SurfaceSample s = Generator.SampleSurface(player.transform.position.x, player.transform.position.z);
+                    builder.Append("\nBiome ").Append(s.biome).Append("   height ").Append(s.height.ToString("0.0")).Append(" m   slope ").Append((s.slope * 90f).ToString("0")).Append("°   snow ").Append(s.snow.ToString("0.00"));
+                }
+            }
+
             text.text = builder.ToString();
         }
     }

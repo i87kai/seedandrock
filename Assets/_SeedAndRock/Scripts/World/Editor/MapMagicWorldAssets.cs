@@ -18,7 +18,7 @@ namespace SeedAndRock.World.Editor
                 if(fresh)AssetDatabase.CreateAsset(tex,texturePath);else EditorUtility.SetDirty(tex);
                 string layerPath=root+"/MM_Layer_"+i+".terrainlayer";layers[i]=AssetDatabase.LoadAssetAtPath<TerrainLayer>(layerPath);if(layers[i]==null){layers[i]=new TerrainLayer();AssetDatabase.CreateAsset(layers[i],layerPath);}layers[i].name=names[i];layers[i].diffuseTexture=tex;layers[i].tileSize=new Vector2(6,6);EditorUtility.SetDirty(layers[i]);
             }
-            if(AssetDatabase.LoadAssetAtPath<Material>(root+"/SR_MapMagicTerrain.mat")==null){var mat=new Material(Shader.Find("Universal Render Pipeline/Terrain/Lit"));AssetDatabase.CreateAsset(mat,root+"/SR_MapMagicTerrain.mat");}
+            if(AssetDatabase.LoadAssetAtPath<Material>(root+"/SR_MapMagicTerrain.mat")==null){var mat=new Material(Shader.Find("Cozy/Terrain")??Shader.Find("Universal Render Pipeline/Terrain/Lit"));AssetDatabase.CreateAsset(mat,root+"/SR_MapMagicTerrain.mat");}
             string proxyPath=root+"/MM_PlacementProxy.prefab";var proxy=AssetDatabase.LoadAssetAtPath<GameObject>(proxyPath);
             if(proxy==null){var go=GameObject.CreatePrimitive(PrimitiveType.Cube);go.name="MapMagic placement proxy";Object.DestroyImmediate(go.GetComponent<Collider>());go.transform.localScale=Vector3.one*.01f;proxy=PrefabUtility.SaveAsPrefabAsset(go,proxyPath);Object.DestroyImmediate(go);}
             var graph=SurvivalGraph.Create(layers,proxy);string graphPath=root+"/SR_MapMagicWorld.asset";var existing=AssetDatabase.LoadAssetAtPath<MapMagic.Nodes.Graph>(graphPath);
