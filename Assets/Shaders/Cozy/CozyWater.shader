@@ -14,6 +14,8 @@ Shader "Cozy/Water"
         _ShallowColor ("Shallow Color (A = opacity)", Color) = (0.30, 0.80, 0.78, 0.45)
         _DeepColor ("Deep Color (A = opacity)", Color) = (0.05, 0.30, 0.55, 0.92)
         _DepthDistance ("Depth Gradient Distance", Range(0.1, 30)) = 5
+        _DistantColor ("Distant Water Color", Color) = (0.12, 0.42, 0.66, 1)
+        _DistanceFade ("Distance Fade (m)", Range(20, 600)) = 220
         _UnderwaterColor ("Underwater Tint (seen from below)", Color) = (0.10, 0.42, 0.55, 0.75)
         _Saturation ("Saturation", Range(0, 2)) = 1.1
 
@@ -27,12 +29,15 @@ Shader "Cozy/Water"
         [Toggle(_COZY_WATER_DETAIL_HIGH)] _DetailHigh ("High Detail Ripples (2 layers + sparkle)", Float) = 1
 
         [Header(Reflection and Specular)]
-        _ReflectionStrength ("Sky Reflection Strength", Range(0, 1)) = 0.6
+        _ReflectionStrength ("Sky Reflection Strength", Range(0, 1)) = 0.5
+        _ReflectionMax ("Max Reflection At Grazing Angles", Range(0, 1)) = 0.55
+        _ReflectionSkyLift ("Reflect Higher Sky (bluer, less haze)", Range(0, 1)) = 0.45
         _FresnelPower ("Fresnel Power", Range(0.5, 8)) = 4
         _FresnelBias ("Fresnel Bias", Range(0, 0.5)) = 0.04
         _SunSpecularPower ("Sun Specular Power", Range(8, 1024)) = 260
-        _SunSpecularStrength ("Sun Specular Strength", Range(0, 4)) = 1.2
-        _SparkleStrength ("Sparkle", Range(0, 2)) = 0.6
+        _SunSpecularStrength ("Sun Specular Strength", Range(0, 4)) = 1.0
+        _SunGlow ("Sun Glow In Reflection", Range(0, 1)) = 0.25
+        _SparkleStrength ("Sparkle", Range(0, 2)) = 0.5
 
         [Header(Foam)]
         _FoamColor ("Foam Color", Color) = (0.95, 1.0, 0.97, 1)
@@ -83,6 +88,8 @@ Shader "Cozy/Water"
                 half4 _ShallowColor;
                 half4 _DeepColor;
                 float _DepthDistance;
+                half4 _DistantColor;
+                float _DistanceFade;
                 half4 _UnderwaterColor;
                 half  _Saturation;
                 float _WaveAmplitude;
@@ -92,10 +99,13 @@ Shader "Cozy/Water"
                 half  _NormalStrength;
                 float _NormalSpeed;
                 half  _ReflectionStrength;
+                half  _ReflectionMax;
+                half  _ReflectionSkyLift;
                 half  _FresnelPower;
                 half  _FresnelBias;
                 half  _SunSpecularPower;
                 half  _SunSpecularStrength;
+                half  _SunGlow;
                 half  _SparkleStrength;
                 half4 _FoamColor;
                 float _FoamDistance;
@@ -178,7 +188,11 @@ Shader "Cozy/Water"
 
                 bool cameraBelow = _WorldSpaceCameraPos.y < positionWS.y - 0.02;
 
-                half3 normalWS = CozyRippleNormal(positionWS.xz, t, _NormalStrength);
+                // 0 near the camera .. 1 far away. Far water must read as one calm, stable colour:
+                // ripples, refraction and foam all fade out with it.
+                half distance01 = saturate(waterEyeDepth / max(_DistanceFade, 1.0));
+                half rippleStrength = _NormalStrength * lerp(1.0h, 0.15h, distance01);
+                half3 normalWS = CozyRippleNormal(positionWS.xz, t, rippleStrength);
                 if (cameraBelow) normalWS = -normalWS;
                 half3 viewDirWS = half3(normalize(_WorldSpaceCameraPos - positionWS));
                 half NdotV = saturate(dot(normalWS, viewDirWS));
@@ -194,6 +208,9 @@ Shader "Cozy/Water"
                 float refrEyeDepth = LinearEyeDepth(SampleSceneDepth(refrUV), _ZBufferParams);
                 if (refrEyeDepth < waterEyeDepth) refrUV = screenUV; else { sceneEyeDepth = refrEyeDepth; depthDiff = max(refrEyeDepth - waterEyeDepth, 0.0); }
                 half3 sceneColor = half3(SampleSceneColor(refrUV));
+                // Beyond the far plane the opaque texture only contains the (bright) sky: never let
+                // that leak through as "white water". Treat anything past the far plane as deep.
+                if (sceneEyeDepth > _ProjectionParams.z * 0.98) depthDiff = 1e4;
             #endif
 
                 half depth01 = 1.0h - exp(-depthDiff / max(_DepthDistance, 0.05) * 2.5);
@@ -207,6 +224,9 @@ Shader "Cozy/Water"
                 // --- Water body colour --------------------------------------------
                 half3 bodyColor = lerp(_ShallowColor.rgb, _DeepColor.rgb, depth01);
                 half bodyAlpha = lerp(_ShallowColor.a, _DeepColor.a, depth01);
+                // Distant water: converge on a single readable colour and become opaque.
+                bodyColor = lerp(bodyColor, _DistantColor.rgb, distance01);
+                bodyAlpha = lerp(bodyAlpha, 1.0h, distance01);
                 if (cameraBelow)
                 {
                     bodyColor = _UnderwaterColor.rgb;
@@ -219,12 +239,16 @@ Shader "Cozy/Water"
                 // --- Fresnel sky reflection ---------------------------------------
                 half fresnel = _FresnelBias + (1.0h - _FresnelBias) * pow(1.0h - NdotV, _FresnelPower);
                 half3 reflDir = reflect(-viewDirWS, normalWS);
-                reflDir.y = abs(reflDir.y);
+                // At grazing angles the mirrored direction skims the horizon, which is the hazy,
+                // near-white part of the sky gradient. Real water does that; stylized water should
+                // stay blue, so lift the sampled direction toward the zenith instead.
+                reflDir.y = max(abs(reflDir.y), _ReflectionSkyLift);
                 half3 skyColor = CozySampleSkyApprox(reflDir);
-                // Sun glow inside the reflection.
-                half sunGlow = pow(saturate(dot(reflDir, sunDir)), 24.0h) * 0.5h;
-                skyColor += sunColor * sunGlow;
-                half reflectionAmount = fresnel * _ReflectionStrength * (cameraBelow ? 0.3h : 1.0h);
+                // Sun glow inside the reflection: tight and energy-limited (uses the normalised sun
+                // colour, not the HDR light intensity, so it can never blow the surface out to white).
+                half sunGlow = pow(saturate(dot(reflDir, sunDir)), 160.0h) * _SunGlow;
+                skyColor += saturate(sunColor) * sunGlow;
+                half reflectionAmount = min(fresnel * _ReflectionStrength, _ReflectionMax) * (cameraBelow ? 0.3h : 1.0h);
 
                 // --- Specular + sparkle ------------------------------------------
                 half3 halfDir = SafeNormalize(sunDir + viewDirWS);
@@ -233,8 +257,9 @@ Shader "Cozy/Water"
             #if defined(_COZY_WATER_DETAIL_HIGH)
                 float glitter = CozyValueNoise(positionWS.xz * 9.0 + float2(t * 3.0, -t * 2.2));
                 glitter = pow(saturate(glitter), 14.0) * 20.0;
-                spec += glitter * _SparkleStrength * pow(saturate(dot(normalWS, halfDir)), 32.0h) * shadow;
+                spec += glitter * _SparkleStrength * pow(saturate(dot(normalWS, halfDir)), 32.0h) * shadow * (1.0h - distance01);
             #endif
+                spec = min(spec, 1.5h);
 
                 // --- Foam ------------------------------------------------------------
                 half shoreMask = 1.0h - saturate(depthDiff / max(_FoamDistance, 0.01));
@@ -243,7 +268,7 @@ Shader "Cozy/Water"
                 bands = pow(bands, 3.0h) * _FoamBands;
                 half crest = saturate(input.data.x - 0.35h) * _CrestFoam * saturate(foamNoise * 2.0h - 0.6h) * 2.0h;
                 half foamValue = shoreMask * (0.55h + 0.45h * foamNoise) + shoreMask * bands + crest;
-                half foam = smoothstep(_FoamCutoff, _FoamCutoff + _FoamSoftness, foamValue);
+                half foam = smoothstep(_FoamCutoff, _FoamCutoff + _FoamSoftness, foamValue) * (1.0h - distance01 * 0.85h);
                 if (cameraBelow) foam *= 0.25h;
                 half3 foamColor = _FoamColor.rgb * (ambient + sunColor * lerp(0.45h, 1.0h, shadow));
 
